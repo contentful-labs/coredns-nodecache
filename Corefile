@@ -1,0 +1,29 @@
+.:5300 {
+    log
+    bind 168.255.10.20
+    nodecache
+    cache
+    forward . 1.1.1.1:53 {
+        force_tcp
+    }
+}
+
+google.com:5300 {
+    log
+    bind 168.255.10.20
+    nodecache
+    cache
+    forward . 1.1.1.1:53 {
+        force_tcp
+    }
+}
+
+.:5307 {
+    log
+    bind 168.255.10.25
+    nodecache
+    cache
+    forward . 1.1.1.1:53 {
+        force_tcp
+    }
+}
