@@ -1,6 +1,6 @@
 # Coredns-nodecache
 
-**Warning: This is an early release. Please de not use in production**
+**Warning: This is an early release. Please do not use in production**
 
 The Kubernetes [Node-local dns](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/dns/nodelocaldns)
 add-on proposes running a DNS caching server on all of a Kubernetes cluster's nodes. The suggested caching server is
@@ -20,9 +20,4 @@ for this are:
 ### Configuration
 
 Configuration is done by adding "nodecache" to configuration blocks in your CoreDNS configuration file.
-
-### Usage
-
-Coredns-nodecache is very similar in principle to Nodecache. We provide an updated
-[nodelocaldns.yaml](nodelocaldns.yaml) file for convenience.
 
