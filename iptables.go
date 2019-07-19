@@ -6,22 +6,22 @@ import (
 	"strconv"
 )
 
-type Rule struct {
+type rule struct {
 	table    string
 	chain    string
 	rulespec []string
 }
 
-func NewRule(table, chain string, rulespec ...string) Rule {
-	return Rule{
+func NewRule(table, chain string, rulespec ...string) rule {
+	return rule{
 		table:    table,
 		chain:    chain,
 		rulespec: rulespec,
 	}
 }
 
-func iptablesRules(localIPs []net.IP, localPort int) []Rule {
-	r := make([]Rule, 0)
+func iptablesRules(localIPs []net.IP, localPort int) []rule {
+	r := make([]rule, 0)
 	slocalPort := strconv.Itoa(localPort)
 
 	for _, localIP := range localIPs {
@@ -39,7 +39,7 @@ func iptablesRules(localIPs []net.IP, localPort int) []Rule {
 	return r
 }
 
-func ensureRuleDeleted(ipt *iptables.IPTables, r Rule) (bool, error) {
+func ensureRuleDeleted(ipt *iptables.IPTables, r rule) (bool, error) {
 	exists, err := ipt.Exists(r.table, r.chain, r.rulespec...)
 	if err != nil {
 		return false, err

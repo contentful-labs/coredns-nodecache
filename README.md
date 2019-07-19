@@ -16,8 +16,48 @@ for this are:
  *  the configuration of nodecache would be done in the CoreDNS configuration file, instead of being split between
     the Corefile and command-line parameters.
 
-
 ### Configuration
 
 Configuration is done by adding "nodecache" to configuration blocks in your CoreDNS configuration file.
 
+As the following example shows, you can use the directive in several blocks. For each block, coredns-nodecache will
+add the "bind" address to the dummy interface, and create iptable rules for the IP:PORT.
+
+```
+.:5300 {
+    bind 168.255.10.20
+    nodecache
+    forward . 1.1.1.1:53 {
+        force_tcp
+    }
+}
+
+.:5301 {
+    bind 168.255.10.25
+    nodecache
+    forward . 1.1.1.1:53 {
+        force_tcp
+    }
+}
+```
+
+### Development
+
+Checkout this repository & CoreDNS in your GOPATH. in the CoreDNS repository, in plugin.cfg, add the following line:
+
+  ```nodecache:github.com/contentful-labs/coredns-nodecache```
+
+Then at the end of go.mod:
+
+  ```replace github.com/contentful-labs/coredns-nodecache => ../../contentful-labs/coredns-nodecache```
+
+*make* should build CoreDNS and include the coredns-nodecache plugin.
+
+   ```
+   ./coredns -plugins
+   [...]
+   dns.metadata
+   dns.nodecache
+   dns.nsid
+   [...]
+   ```
