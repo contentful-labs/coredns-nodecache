@@ -2,15 +2,14 @@ package nodecache
 
 import (
 	"fmt"
-	"net"
-	"strconv"
-
 	"github.com/caddyserver/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/vishvananda/netlink"
+	"net"
+	"strconv"
 )
 
 var log = clog.NewWithPlugin("nodecache")
@@ -30,7 +29,7 @@ type config struct {
 }
 
 func setup(c *caddy.Controller) error {
-	cfg, err := parseConfig(dnsserver.GetConfig(c))
+	cfg, err := parseConfig(c, dnsserver.GetConfig(c))
 
 	if err != nil {
 		return plugin.Error("nodecache", c.ArgErr())
@@ -38,10 +37,10 @@ func setup(c *caddy.Controller) error {
 
 	nl := netlink.Handle{}
 
-	if exists, err := EnsureDummyDevice(nl, cfg.ifName, cfg.localIPs); err != nil {
+	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs); err != nil {
 		return plugin.Error("nodecache", fmt.Errorf("failed to create dummy interface: %s", err))
 	} else if !exists {
-		clog.Infof("Added interface - %s", cfg.ifName)
+		clog.Infof("nodecache - added interface - %s with IPs %s", cfg.ifName, cfg.localIPs)
 	}
 
 	ipt, err := iptables.New()
@@ -57,14 +56,14 @@ func setup(c *caddy.Controller) error {
 	}
 
 	c.OnShutdown(func() error {
-		log.Info("nodecache shutting down")
+		log.Info("nodecache - shutting down")
 
 		for _, rule := range rules {
 			// ensureRuleDeleted returns true, nil if a rule was actually deleted, false, nil if the action was a noop
 			if deleted, err := ensureRuleDeleted(ipt, rule); err != nil {
 				return err
 			} else if deleted {
-				clog.Infof("deleted iptable rule %s %s: %s", rule.table, rule.chain, rule.rulespec)
+				clog.Infof("nodecache - deleted iptable rule %s %s: %s", rule.table, rule.chain, rule.rulespec)
 			}
 		}
 
@@ -74,13 +73,22 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func parseConfig(serverConfig *dnsserver.Config) (*config, error) {
-
+func parseConfig(c *caddy.Controller, serverConfig *dnsserver.Config) (*config, error) {
 	pluginCfg := config{
 		ifName:        "nodecache",
 		setupIPTables: true,
 		port:          53,
 		localIPs:      []net.IP{net.ParseIP("192.168.10.100")},
+	}
+
+	for c.Next() {
+		args := c.RemainingArgs()
+		if len(args) > 0 {
+			switch {
+			case args[0] == "skip_iptables":
+				pluginCfg.setupIPTables = false
+			}
+		}
 	}
 
 	if serverConfig.Port != "" {

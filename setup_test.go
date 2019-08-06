@@ -25,16 +25,26 @@ func TestSetupParse(t *testing.T) {
 			},
 			false,
 		},
+		{
+			`nodecache skip_iptables`, // TODO caddy enable bind plugin here
+			config{
+				ifName:        "nodecache",
+				setupIPTables: false,
+				port:          53,
+				localIPs:      []net.IP{net.ParseIP("192.168.10.100")},
+			},
+			false,
+		},
 	} {
 		c := caddy.NewTestController("dns", test.config)
-		output, err := parseConfig(dnsserver.GetConfig(c))
+		output, err := parseConfig(c, dnsserver.GetConfig(c))
 		if test.shouldErr {
 			if err != nil {
 				t.Error("Should've returned an error")
 			}
 		} else {
 			if !reflect.DeepEqual(output, &test.expected) {
-				t.Error("Expected", &test.expected, " gots ", output)
+				t.Error("Expected", &test.expected, " got ", output)
 			}
 		}
 		// TODO ensure interface
@@ -61,7 +71,8 @@ func TestConfigParse(t *testing.T) {
 			false,
 		},
 	} {
-		output, err := parseConfig(&test.input)
+		c := caddy.NewTestController("dns", "nodecache")
+		output, err := parseConfig(c, &test.input)
 		if test.shouldErr {
 			if err != nil {
 				t.Error("Should've returned an error")

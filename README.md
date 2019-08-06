@@ -18,7 +18,7 @@ for this are:
 
 ### Configuration
 
-Configuration is done by adding "nodecache" to configuration blocks in your CoreDNS configuration file.
+Configuration is done by adding "nodecache [skip_iptables]" to configuration blocks in your CoreDNS configuration file.
 
 As the following example shows, you can use the directive in several blocks. For each block, coredns-nodecache will
 add the "bind" address to the dummy interface, and create iptable rules for the IP:PORT.
@@ -34,7 +34,7 @@ add the "bind" address to the dummy interface, and create iptable rules for the 
 
 .:5301 {
     bind 168.255.10.25
-    nodecache
+    nodecache skip_iptables
     forward . 1.1.1.1:53 {
         force_tcp
     }
