@@ -73,17 +73,17 @@ func TestEnsureDummyDevice(t *testing.T) {
 	ifName := "mockIf"
 
 	if _, err := EnsureDummyDevice(nl, ifName, []net.IP{net.IPv4(8, 8, 8, 8), net.IPv4(8, 8, 4, 4)}, mockAddrAdder); err != nil {
-		t.Errorf("failed adding dummy device: %s", err)
+		t.Errorf("Failed adding dummy device: %s", err)
 	}
 
 	l, err := nl.LinkByName(ifName)
 	if err != nil {
-		t.Errorf("failed creating test interface")
+		t.Errorf("Failed creating test interface")
 	}
 
 	addrs, err := nl.AddrList(l, unix.AF_INET)
 	if len(addrs) != 2 || err != nil {
-		t.Errorf("failed assigning IP address to interface")
+		t.Errorf("Failed assigning IP address to interface")
 	}
 }
 
@@ -98,15 +98,15 @@ func TestEnsureDummyDeviceWithExistingIPs(t *testing.T) {
 	_ = mockAddrAdder(l, &netlink.Addr{IPNet: netlink.NewIPNet(net.IP{8, 8, 8, 8})} )
 
 	if alreadyExists, err = EnsureDummyDevice(nl, ifName, []net.IP{net.IPv4(8, 8, 8, 8), net.IPv4(8, 8, 4, 4)}, mockAddrAdder); err != nil {
-		t.Errorf("failed adding dummy device: %s", err)
+		t.Errorf("Failed adding dummy device: %s", err)
 	}
 
 	if alreadyExists != true {
-		t.Errorf("test interface should already exist")
+		t.Errorf("Test interface should already exist")
 	}
 
 	addrs, err := nl.AddrList(l, unix.AF_INET)
 	if len(addrs) != 2 || err != nil {
-		t.Errorf("failed assigning IP address to interface")
+		t.Errorf("Failed assigning IP address to interface")
 	}
 }
