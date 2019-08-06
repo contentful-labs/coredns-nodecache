@@ -13,11 +13,16 @@ RUN mkdir -p plugin/nodecache
 RUN echo 'nodecache:nodecache' >> /coredns/plugin.cfg
 
 COPY Corefile /coredns/Corefile
-
 COPY *.go /coredns/plugin/nodecache/
-
 RUN make
+RUN chmod 0755 /coredns/coredns
+
+FROM alpine:latest
+RUN apk add iptables
+
+COPY --from=0 /coredns/coredns /
+COPY --from=0 /coredns/Corefile /
 
 EXPOSE 5300
 
-CMD ["./coredns", "-conf", "Corefile"]
+ENTRYPOINT ["/coredns"]
