@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/vishvananda/netlink"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
 
@@ -15,11 +15,14 @@ type netlinkIf interface {
 	LinkByName(string) (netlink.Link, error)
 	AddrList(netlink.Link, int) ([]netlink.Addr, error)
 	LinkAdd(netlink.Link) error
+	LinkDel(netlink.Link) error
 }
+
+type addrAdder = func(netlink.Link, *netlink.Addr) error
 
 // EnsureDummyDevice checks for the presence of the given dummy device and creates one if it does not exist.
 // Returns a boolean to indicate if this device was found and error if any.
-func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP) (bool, error) {
+func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP, addrAdd addrAdder) (bool, error) {
 	l, err := nl.LinkByName(ifName)
 	linkAlreadyPresent := (err == nil)
 
@@ -29,6 +32,9 @@ func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP) (bool, e
 		}
 		if err = nl.LinkAdd(dummy); err != nil {
 			return linkAlreadyPresent, err
+		}
+		if l, err = nl.LinkByName(ifName); err != nil {
+			return linkAlreadyPresent, fmt.Errorf("failed getting link after creating it")
 		}
 	}
 
@@ -49,7 +55,7 @@ func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP) (bool, e
 		}
 
 		if addrPresent == false {
-			if err := netlink.AddrAdd(l, &netlink.Addr{IPNet: netlink.NewIPNet(ensureIP)}); err != nil {
+			if err := addrAdd(l, &netlink.Addr{IPNet: netlink.NewIPNet(ensureIP)}); err != nil {
 				return linkAlreadyPresent, fmt.Errorf("failed adding ip %s to interface %s: %s", ensureIP, ifName, err)
 			}
 			clog.Infof("nodecache - adding IP %s to interface %s", ensureIP, ifName)
@@ -60,7 +66,7 @@ func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP) (bool, e
 }
 
 // RemoveDummyDevice deletes the dummy device with the given name.
-func EnsureDummyDeviceRemoved(nl netlink.Handle, ifName string) error {
+func EnsureDummyDeviceRemoved(nl netlinkIf, ifName string) error {
 	link, err := nl.LinkByName(ifName)
 	if err != nil {
 		// link does not exist, we do nothing

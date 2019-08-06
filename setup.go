@@ -37,7 +37,7 @@ func setup(c *caddy.Controller) error {
 
 	nl := netlink.Handle{}
 
-	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs); err != nil {
+	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs, netlink.AddrAdd); err != nil {
 		return plugin.Error("nodecache", fmt.Errorf("failed to create dummy interface: %s", err))
 	} else if !exists {
 		clog.Infof("nodecache - added interface - %s with IPs %s", cfg.ifName, cfg.localIPs)
@@ -67,7 +67,7 @@ func setup(c *caddy.Controller) error {
 			}
 		}
 
-		return EnsureDummyDeviceRemoved(nl, cfg.ifName)
+		return EnsureDummyDeviceRemoved(&nl, cfg.ifName)
 	})
 
 	return nil
