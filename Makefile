@@ -4,5 +4,5 @@ build:
 run: build
 	docker run --cap-add=NET_ADMIN --cap-add=NET_RAW --privileged -P contentful/coredns-nodecache
 
-test: 
-	go test -v
+test: build
+	docker run -ti -w="/coredns/plugin/nodecache" contentful/coredns-nodecache go test -v ./...
