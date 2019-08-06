@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -58,7 +57,6 @@ func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP, addrAdd 
 			if err := addrAdd(l, &netlink.Addr{IPNet: netlink.NewIPNet(ensureIP)}); err != nil {
 				return linkAlreadyPresent, fmt.Errorf("failed adding ip %s to interface %s: %s", ensureIP, ifName, err)
 			}
-			clog.Infof("nodecache - adding IP %s to interface %s", ensureIP, ifName)
 		}
 	}
 
