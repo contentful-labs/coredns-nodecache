@@ -1,4 +1,4 @@
-FROM golang:1.12-stretch
+FROM golang:1.12-stretch AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
@@ -20,8 +20,8 @@ RUN chmod 0755 /coredns/coredns
 FROM alpine:latest
 RUN apk add iptables
 
-COPY --from=0 /coredns/coredns /
-COPY --from=0 /coredns/Corefile /
+COPY --from=builder /coredns/coredns /
+COPY --from=builder /coredns/Corefile /
 
 EXPOSE 5300
 

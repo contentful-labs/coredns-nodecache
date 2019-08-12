@@ -1,0 +1,20 @@
+version: 2
+jobs:
+  test:
+    machine:
+      docker_layer_caching: true
+    steps:
+      - checkout
+      - run: make test 
+  build:
+    machine:
+      docker_layer_caching: true
+    steps:
+      - checkout
+      - run: make build 
+workflows:
+  version: 2
+  flow:
+    jobs:
+      - test 
+      - build
