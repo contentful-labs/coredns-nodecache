@@ -17,13 +17,16 @@ jobs:
     steps:
       - checkout
       - run: make build
+  publish-branch:
+    executor: docker-publisher
+    steps:
       - run:
           name: publish docker image with branch
           command: |
             docker tag contentful-labs/coredns-nodecache:latest $IMAGE_NAME:$CIRCLE_BRANCH
             echo "$docker_password" | docker login -u "$docker_login" --password-stdin
             docker push $IMAGE_NAME:$CIRCLE_BRANCH
-  publish-latest:
+  publish-master:
     executor: docker-publisher
     steps:
       - run:
@@ -38,7 +41,11 @@ workflows:
     jobs:
       - test 
       - build
-      - publish-latest:
+      - publish-branch:
+          requires:
+            - build
+            - test
+      - publish-master:
           requires:
             - build
             - test

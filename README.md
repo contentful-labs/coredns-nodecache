@@ -18,6 +18,8 @@ for this are:
 
 ### Configuration
 
+You can use the docker hub image available at https://hub.docker.com/r/contentful/coredns-nodecache
+
 Configuration is done by adding "nodecache" to configuration blocks in your CoreDNS configuration file.
 
 As the following example shows, you can use the directive in several blocks. For each block, coredns-nodecache will
