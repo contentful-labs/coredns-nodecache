@@ -1,4 +1,4 @@
-# Coredns-nodecache
+# Coredns-nodecache [![CircleCI](https://circleci.com/gh/contentful-labs/coredns-nodecache.svg?style=svg)](https://circleci.com/gh/contentful-labs/coredns-nodecache)
 
 **Warning: This is an early release. Please do not use in production**
 
