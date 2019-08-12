@@ -31,17 +31,16 @@ type config struct {
 
 func setup(c *caddy.Controller) error {
 	cfg, err := parseConfig(dnsserver.GetConfig(c))
-
 	if err != nil {
 		return plugin.Error("nodecache", c.ArgErr())
 	}
 
 	nl := netlink.Handle{}
 
-	if exists, err := EnsureDummyDevice(nl, cfg.ifName, cfg.localIPs); err != nil {
+	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs, netlink.AddrAdd); err != nil {
 		return plugin.Error("nodecache", fmt.Errorf("failed to create dummy interface: %s", err))
 	} else if !exists {
-		clog.Infof("Added interface - %s", cfg.ifName)
+		log.Infof("Added interface - %s", cfg.ifName)
 	}
 
 	ipt, err := iptables.New()
@@ -64,11 +63,11 @@ func setup(c *caddy.Controller) error {
 			if deleted, err := ensureRuleDeleted(ipt, rule); err != nil {
 				return err
 			} else if deleted {
-				clog.Infof("deleted iptable rule %s %s: %s", rule.table, rule.chain, rule.rulespec)
+				log.Infof("deleted iptable rule %s %s: %s", rule.table, rule.chain, rule.rulespec)
 			}
 		}
 
-		return EnsureDummyDeviceRemoved(nl, cfg.ifName)
+		return EnsureDummyDeviceRemoved(&nl, cfg.ifName)
 	})
 
 	return nil
