@@ -1,4 +1,10 @@
-version: 2
+version: 2.1
+executors:
+  docker-publisher:
+    environment:
+      IMAGE_NAME: contentful/coredns-nodecache
+    machine:
+      docker_layer_caching: true
 jobs:
   test:
     machine:
@@ -7,14 +13,45 @@ jobs:
       - checkout
       - run: make test 
   build:
-    machine:
-      docker_layer_caching: true
+    executor: docker-publisher
     steps:
       - checkout
-      - run: make build 
+      - run: make build
+  publish-branch:
+    executor: docker-publisher
+    steps:
+      - run:
+          name: publish docker image with branch
+          command: |
+            docker tag contentful-labs/coredns-nodecache:latest $IMAGE_NAME:$CIRCLE_BRANCH
+            echo "$docker_password" | docker login -u "$docker_login" --password-stdin
+            docker push $IMAGE_NAME:$CIRCLE_BRANCH
+  publish-master:
+    executor: docker-publisher
+    steps:
+      - run:
+          name: publish docker image with latest tag 
+          command: |
+            docker tag contentful-labs/coredns-nodecache:latest $IMAGE_NAME:latest
+            echo "$docker_password" | docker login -u "$docker_login" --password-stdin
+            docker push $IMAGE_NAME:latest
 workflows:
   version: 2
   flow:
     jobs:
       - test 
       - build
+      - publish-branch:
+          requires:
+            - build
+            - test
+          filters:
+            branches:
+              ignore: master
+      - publish-master:
+          requires:
+            - build
+            - test
+          filters:
+            branches:
+              only: master 
