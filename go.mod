@@ -10,6 +10,11 @@ require (
 	github.com/aws/aws-sdk-go v1.22.3 // indirect
 	github.com/bifurcation/mint v0.0.0-20190129141059-83ba9bc2ead9 // indirect
 	github.com/caddyserver/caddy v1.0.1
+<<<<<<< HEAD
+=======
+	github.com/coredns/coredns v1.5.2
+	github.com/coreos/go-iptables v0.4.2 // indirect
+>>>>>>> 6977cfdf68900058646c392ffb57e2756f77050c
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/coredns/coredns v1.6.1
 	github.com/coreos/bbolt v1.3.3 // indirect
