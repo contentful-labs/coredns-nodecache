@@ -31,14 +31,13 @@ type config struct {
 
 func setup(c *caddy.Controller) error {
 	cfg, err := parseConfig(dnsserver.GetConfig(c))
-
 	if err != nil {
 		return plugin.Error("nodecache", c.ArgErr())
 	}
 
 	nl := netlink.Handle{}
 
-	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs); err != nil {
+	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs, netlink.AddrAdd); err != nil {
 		return plugin.Error("nodecache", fmt.Errorf("failed to create dummy interface: %s", err))
 	} else if !exists {
 		log.Infof("Added interface - %s", cfg.ifName)
