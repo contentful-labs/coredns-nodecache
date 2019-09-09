@@ -20,7 +20,13 @@ for this are:
 
 You can use the docker hub image available at https://hub.docker.com/r/contentful/coredns-nodecache
 
-Configuration is done by adding "nodecache" to configuration blocks in your CoreDNS configuration file.
+Configuration is done by adding `nodecache` to configuration blocks in your CoreDNS configuration file.
+
+```
+nodecache [skipteardown]
+```
+
+* **skipteardown**: skips removing the iptables and dummy network interface on shutdown
 
 As the following example shows, you can use the directive in several blocks. For each block, coredns-nodecache will
 add the "bind" address to the dummy interface, and create iptable rules for the IP:PORT.
