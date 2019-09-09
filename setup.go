@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/caddyserver/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
@@ -27,11 +28,19 @@ type config struct {
 	ifName        string
 	localIPs      []net.IP
 	setupIPTables bool
+	skipTeardown  bool
 }
 
 func setup(c *caddy.Controller) error {
-	cfg, err := parseConfig(dnsserver.GetConfig(c))
-	if err != nil {
+
+	cfg := getDefaultCfg()
+	if cfg.parsePlgConfig(c) != nil {
+		log.Errorf("Error while parsing plugin config")
+		return plugin.Error("nodecache", c.ArgErr())
+	}
+
+	if cfg.parseSrvConfig(dnsserver.GetConfig(c)) != nil {
+		log.Errorf("Error while parsing server config")
 		return plugin.Error("nodecache", c.ArgErr())
 	}
 
@@ -58,42 +67,61 @@ func setup(c *caddy.Controller) error {
 	c.OnShutdown(func() error {
 		log.Info("nodecache shutting down")
 
-		for _, rule := range rules {
-			// ensureRuleDeleted returns true, nil if a rule was actually deleted, false, nil if the action was a noop
-			if deleted, err := ensureRuleDeleted(ipt, rule); err != nil {
-				return err
-			} else if deleted {
-				log.Infof("deleted iptable rule %s %s: %s", rule.table, rule.chain, rule.rulespec)
+		if !cfg.skipTeardown {
+			for _, rule := range rules {
+				// ensureRuleDeleted returns true, nil if a rule was actually deleted, false, nil if the action was a noop
+				if deleted, err := ensureRuleDeleted(ipt, rule); err != nil {
+					return err
+				} else if deleted {
+					log.Infof("deleted iptable rule %s %s: %s", rule.table, rule.chain, rule.rulespec)
+				}
 			}
-		}
 
-		return EnsureDummyDeviceRemoved(&nl, cfg.ifName)
+			return EnsureDummyDeviceRemoved(&nl, cfg.ifName)
+		}
+		log.Info("skipping teardown")
+		return nil
 	})
 
 	return nil
 }
 
-func parseConfig(serverConfig *dnsserver.Config) (*config, error) {
-
-	pluginCfg := config{
+func getDefaultCfg() config {
+	return config{
 		ifName:        "nodecache",
 		setupIPTables: true,
 		port:          53,
 		localIPs:      []net.IP{net.ParseIP("192.168.10.100")},
+		skipTeardown:  false,
 	}
+}
+
+func (cfg *config) parsePlgConfig(c *caddy.Controller) error {
+	for c.Next() {
+		for c.NextArg() {
+			switch arg := c.Val(); strings.ToLower(arg) {
+			case "skipteardown":
+				cfg.skipTeardown = true
+			}
+		}
+	}
+	return nil
+}
+
+func (cfg *config) parseSrvConfig(serverConfig *dnsserver.Config) error {
 
 	if serverConfig.Port != "" {
 		if p, err := strconv.Atoi(serverConfig.Port); err == nil {
-			pluginCfg.port = p
+			cfg.port = p
 		}
 	}
 
 	if len(serverConfig.ListenHosts) > 0 && serverConfig.ListenHosts[0] != "" {
-		pluginCfg.localIPs = []net.IP{}
+		cfg.localIPs = []net.IP{}
 		for _, ip := range serverConfig.ListenHosts {
-			pluginCfg.localIPs = append(pluginCfg.localIPs, net.ParseIP(ip))
+			cfg.localIPs = append(cfg.localIPs, net.ParseIP(ip))
 		}
 	}
 
-	return &pluginCfg, nil
+	return nil
 }
