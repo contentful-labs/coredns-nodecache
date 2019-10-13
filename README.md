@@ -14,7 +14,7 @@ for this are:
  *  the configuration of nodecache would be done in the CoreDNS configuration file, instead of being split between
     the Corefile and command-line parameters.
 
-Additionnally, coredns-nodecache can provide a **high-availability** setup for Node-local.
+Additionally, coredns-nodecache can provide a **high-availability** setup for Node-local.
 
 ### Plugin configuration
 
