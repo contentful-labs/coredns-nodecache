@@ -11,9 +11,8 @@ import (
 
 func TestSetupParse(t *testing.T) {
 	for _, test := range []struct {
-		config    string
-		expected  config
-		shouldErr bool
+		config   string
+		expected config
 	}{
 		{
 			`nodecache`, // TODO caddy enable bind plugin here
@@ -22,20 +21,30 @@ func TestSetupParse(t *testing.T) {
 				setupIPTables: true,
 				port:          53,
 				localIPs:      []net.IP{net.ParseIP("192.168.10.100")},
+				skipTeardown:  false,
 			},
-			false,
+		},
+		{
+			`nodecache skipteardown`,
+			config{
+				ifName:        "nodecache",
+				setupIPTables: true,
+				port:          53,
+				localIPs:      []net.IP{net.ParseIP("192.168.10.100")},
+				skipTeardown:  true,
+			},
 		},
 	} {
 		c := caddy.NewTestController("dns", test.config)
-		output, err := parseConfig(dnsserver.GetConfig(c))
-		if test.shouldErr {
-			if err != nil {
-				t.Error("Should've returned an error")
-			}
-		} else {
-			if !reflect.DeepEqual(output, &test.expected) {
-				t.Error("Expected", &test.expected, " gots ", output)
-			}
+		cfg := getDefaultCfg()
+		if cfg.parsePlgConfig(c) != nil {
+			t.Error("Error while trying to parse plugin config")
+		}
+		if cfg.parseSrvConfig(dnsserver.GetConfig(c)) != nil {
+			t.Error("Error while trying to parse server config")
+		}
+		if !reflect.DeepEqual(&cfg, &test.expected) {
+			t.Error("Expected", &test.expected, " gots ", &cfg)
 		}
 		// TODO ensure interface
 	}
@@ -57,18 +66,20 @@ func TestConfigParse(t *testing.T) {
 				setupIPTables: true,
 				port:          53,
 				localIPs:      []net.IP{net.ParseIP("168.255.20.10")},
+				skipTeardown:  false,
 			},
 			false,
 		},
 	} {
-		output, err := parseConfig(&test.input)
+		cfg := getDefaultCfg()
+		err := cfg.parseSrvConfig(&test.input)
 		if test.shouldErr {
 			if err != nil {
 				t.Error("Should've returned an error")
 			}
 		} else {
-			if !reflect.DeepEqual(output, &test.output) {
-				t.Error("Expected", &test.output, " gots ", output)
+			if !reflect.DeepEqual(&cfg, &test.output) {
+				t.Error("Expected", &test.output, " gots ", &cfg)
 			}
 		}
 	}
