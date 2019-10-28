@@ -1,12 +1,12 @@
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
-# github.com/caddyserver/caddy v1.0.1
+# github.com/caddyserver/caddy v1.0.3
 github.com/caddyserver/caddy
 github.com/caddyserver/caddy/caddyfile
 github.com/caddyserver/caddy/telemetry
 # github.com/cenkalti/backoff v2.2.1+incompatible
 github.com/cenkalti/backoff
-# github.com/coredns/coredns v1.6.1
+# github.com/coredns/coredns v1.6.4
 github.com/coredns/coredns/core/dnsserver
 github.com/coredns/coredns/plugin
 github.com/coredns/coredns/plugin/pkg/log
@@ -60,7 +60,7 @@ github.com/klauspost/cpuid
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/mholt/certmagic v0.6.2
 github.com/mholt/certmagic
-# github.com/miekg/dns v1.1.15
+# github.com/miekg/dns v1.1.17
 github.com/miekg/dns
 # github.com/opentracing/opentracing-go v1.1.0
 github.com/opentracing/opentracing-go
@@ -71,7 +71,7 @@ github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 # github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 github.com/prometheus/client_model/go
-# github.com/prometheus/common v0.6.0
+# github.com/prometheus/common v0.7.0
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/model
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
@@ -83,12 +83,12 @@ github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20190625233234-7109fa855b0f
 github.com/vishvananda/netns
-# golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
+# golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472
 golang.org/x/crypto/ocsp
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/pbkdf2
-# golang.org/x/net v0.0.0-20190724013045-ca1201d0de80
+# golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
 golang.org/x/net/context
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
@@ -101,7 +101,7 @@ golang.org/x/net/internal/timeseries
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/http/httpguts
-# golang.org/x/sys v0.0.0-20190812073006-9eafafc0a87e
+# golang.org/x/sys v0.0.0-20190904154756-749cb33beabd
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.2
@@ -111,7 +111,7 @@ golang.org/x/text/unicode/norm
 golang.org/x/text/transform
 # google.golang.org/genproto v0.0.0-20190801165951-fa694d86fc64
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.22.1
+# google.golang.org/grpc v1.23.0
 google.golang.org/grpc
 google.golang.org/grpc/peer
 google.golang.org/grpc/codes

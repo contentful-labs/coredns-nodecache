@@ -32,19 +32,14 @@ type config struct {
 }
 
 func setup(c *caddy.Controller) error {
-
 	cfg := getDefaultCfg()
-	if shouldSkipTearDown(c) {
-		cfg.skipTeardown = true
-	}
-
+	cfg.skipTeardown = shouldSkipTearDown(c)
 	if cfg.parseSrvConfig(dnsserver.GetConfig(c)) != nil {
 		log.Errorf("Error while parsing server config")
 		return plugin.Error("nodecache", c.ArgErr())
 	}
 
 	nl := netlink.Handle{}
-
 	if exists, err := EnsureDummyDevice(&nl, cfg.ifName, cfg.localIPs, netlink.AddrAdd); err != nil {
 		return plugin.Error("nodecache", fmt.Errorf("failed to create dummy interface: %s", err))
 	} else if !exists {
