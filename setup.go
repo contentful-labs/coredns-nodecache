@@ -34,9 +34,8 @@ type config struct {
 func setup(c *caddy.Controller) error {
 
 	cfg := getDefaultCfg()
-	if cfg.parsePlgConfig(c) != nil {
-		log.Errorf("Error while parsing plugin config")
-		return plugin.Error("nodecache", c.ArgErr())
+	if shouldSkipTearDown(c) {
+		cfg.skipTeardown = true
 	}
 
 	if cfg.parseSrvConfig(dnsserver.GetConfig(c)) != nil {
@@ -96,23 +95,24 @@ func getDefaultCfg() config {
 	}
 }
 
-func (cfg *config) parsePlgConfig(c *caddy.Controller) error {
+func shouldSkipTearDown(c *caddy.Controller) bool{
 	for c.Next() {
 		for c.NextArg() {
-			switch arg := c.Val(); strings.ToLower(arg) {
-			case "skipteardown":
-				cfg.skipTeardown = true
+			if strings.ToLower(c.Val()) == "skipteardown" {
+				return true
 			}
 		}
 	}
-	return nil
+
+	return false
 }
 
 func (cfg *config) parseSrvConfig(serverConfig *dnsserver.Config) error {
-
 	if serverConfig.Port != "" {
 		if p, err := strconv.Atoi(serverConfig.Port); err == nil {
 			cfg.port = p
+		} else {
+			return err
 		}
 	}
 

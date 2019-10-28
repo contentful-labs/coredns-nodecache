@@ -37,8 +37,8 @@ func TestSetupParse(t *testing.T) {
 	} {
 		c := caddy.NewTestController("dns", test.config)
 		cfg := getDefaultCfg()
-		if cfg.parsePlgConfig(c) != nil {
-			t.Error("Error while trying to parse plugin config")
+		if shouldSkipTearDown(c) {
+			cfg.skipTeardown = true
 		}
 		if cfg.parseSrvConfig(dnsserver.GetConfig(c)) != nil {
 			t.Error("Error while trying to parse server config")
