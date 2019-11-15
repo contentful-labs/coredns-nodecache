@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -217,27 +218,18 @@ func (s *Server) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 		return
 	}
 
-	q := r.Question[0].Name
-	b := make([]byte, len(q))
-	var off int
-	var end bool
-
-	var dshandler *Config
-
 	// Wrap the response writer in a ScrubWriter so we automatically make the reply fit in the client's buffer.
 	w = request.NewScrubWriter(r, w)
 
-	for {
-		l := len(q[off:])
-		for i := 0; i < l; i++ {
-			b[i] = q[off+i]
-			// normalize the name for the lookup
-			if b[i] >= 'A' && b[i] <= 'Z' {
-				b[i] |= ('a' - 'A')
-			}
-		}
+	q := strings.ToLower(r.Question[0].Name)
+	var (
+		off       int
+		end       bool
+		dshandler *Config
+	)
 
-		if h, ok := s.zones[string(b[:l])]; ok {
+	for {
+		if h, ok := s.zones[q[off:]]; ok {
 			if r.Question[0].Qtype != dns.TypeDS {
 				if h.FilterFunc == nil {
 					rcode, _ := h.pluginChain.ServeDNS(ctx, w, r)
@@ -259,7 +251,7 @@ func (s *Server) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 			// The type is DS, keep the handler, but keep on searching as maybe we are serving
 			// the parent as well and the DS should be routed to it - this will probably *misroute* DS
 			// queries to a possibly grand parent, but there is no way for us to know at this point
-			// if there is an actually delegation from grandparent -> parent -> zone.
+			// if there is an actual delegation from grandparent -> parent -> zone.
 			// In all fairness: direct DS queries should not be needed.
 			dshandler = h
 		}
@@ -302,7 +294,6 @@ func (s *Server) OnStartupComplete() {
 	if out != "" {
 		fmt.Print(out)
 	}
-	return
 }
 
 // Tracer returns the tracer in the server if defined.
