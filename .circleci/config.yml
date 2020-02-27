@@ -64,7 +64,9 @@ workflows:
             - test
           filters:
             branches:
-              ignore: master
+              ignore:
+                - master
+                - /pull\/[0-9]+/
       - publish-master:
           requires:
             - build
