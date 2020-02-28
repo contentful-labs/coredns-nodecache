@@ -53,7 +53,7 @@ func EnsureDummyDevice(nl netlinkIf, ifName string, ensureIPs []net.IP, addrAdd 
 			}
 		}
 
-		if addrPresent == false {
+		if !addrPresent {
 			if err := addrAdd(l, &netlink.Addr{IPNet: netlink.NewIPNet(ensureIP)}); err != nil {
 				return linkAlreadyPresent, fmt.Errorf("failed adding ip %s to interface %s: %s", ensureIP, ifName, err)
 			}
