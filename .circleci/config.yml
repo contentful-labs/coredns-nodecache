@@ -11,6 +11,7 @@ jobs:
       docker_layer_caching: true
     steps:
       - checkout
+      - run: make lint
       - run: make test 
   build:
     executor: docker-publisher
