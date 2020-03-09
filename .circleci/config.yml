@@ -6,12 +6,17 @@ executors:
     machine:
       docker_layer_caching: true
 jobs:
-  test:
+  lint:
     machine:
       docker_layer_caching: true
     steps:
       - checkout
       - run: make lint
+  test:
+    machine:
+      docker_layer_caching: true
+    steps:
+      - checkout
       - run: make test 
   build:
     executor: docker-publisher
@@ -57,11 +62,13 @@ workflows:
   version: 2
   flow:
     jobs:
+      - lint
       - test 
       - build
       - publish-branch:
           requires:
             - build
+            - lint
             - test
           filters:
             branches:
@@ -71,6 +78,7 @@ workflows:
       - publish-master:
           requires:
             - build
+            - lint
             - test
           filters:
             branches:
