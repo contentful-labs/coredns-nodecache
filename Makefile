@@ -7,3 +7,7 @@ run: build
 test: 
 	docker run -ti -e GO111MODULE=on -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \
 	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golang:1.13-stretch go test -v -mod=vendor ./...
+
+lint:
+	docker run -ti -e GO111MODULE=on -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \
+	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golangci/golangci-lint:v1.23.7 golangci-lint run
