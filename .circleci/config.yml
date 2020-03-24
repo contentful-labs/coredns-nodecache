@@ -44,6 +44,20 @@ jobs:
             docker tag contentful-labs/coredns-nodecache:latest $IMAGE_NAME:$CIRCLE_BRANCH
             echo "$docker_password" | docker login -u "$docker_login" --password-stdin
             docker push $IMAGE_NAME:$CIRCLE_BRANCH
+  publish-tag:
+    executor: docker-publisher
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Load archived Docker image
+          command: docker load -i /tmp/workspace/image.tar
+      - run:
+          name: publish docker image with tag
+          command: |
+            docker tag contentful-labs/coredns-nodecache:latest $IMAGE_NAME:$CIRCLE_TAG
+            echo "$docker_password" | docker login -u "$docker_login" --password-stdin
+            docker push $IMAGE_NAME:$CIRCLE_TAG
   publish-master:
     executor: docker-publisher
     steps:
@@ -75,6 +89,13 @@ workflows:
               ignore:
                 - master
                 - /pull\/[0-9]+/
+      - publish-tag:
+          # Only run this job on git tag pushes
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /v[0-9]+(\.[0-9]+)*(-.*)*/
       - publish-master:
           requires:
             - build
