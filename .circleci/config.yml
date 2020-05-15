@@ -88,7 +88,6 @@ workflows:
             branches:
               ignore:
                 - master
-                - /pull\/[0-9]+/
       - publish-tag:
           # Only run this job on git tag pushes
           filters:
