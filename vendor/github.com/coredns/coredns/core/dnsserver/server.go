@@ -10,11 +10,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics/vars"
 	"github.com/coredns/coredns/plugin/pkg/edns"
 	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/rcode"
+	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/trace"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 	"github.com/coredns/coredns/request"
@@ -91,8 +93,16 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 		site.pluginChain = stack
 	}
 
+	if !s.debug {
+		// When reloading we need to explicitly disable debug logging if it is now disabled.
+		log.D.Clear()
+	}
+
 	return s, nil
 }
+
+// Compile-time check to ensure Server implements the caddy.GracefulServer interface
+var _ caddy.GracefulServer = &Server{}
 
 // Serve starts the server with an existing listener. It blocks until the server stops.
 // This implements caddy.TCPServer interface.
@@ -122,7 +132,7 @@ func (s *Server) ServePacket(p net.PacketConn) error {
 
 // Listen implements caddy.TCPServer interface.
 func (s *Server) Listen() (net.Listener, error) {
-	l, err := listen("tcp", s.Addr[len(transport.DNS+"://"):])
+	l, err := reuseport.Listen("tcp", s.Addr[len(transport.DNS+"://"):])
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +146,7 @@ func (s *Server) WrapListener(ln net.Listener) net.Listener {
 
 // ListenPacket implements caddy.UDPServer interface.
 func (s *Server) ListenPacket() (net.PacketConn, error) {
-	p, err := listenPacket("udp", s.Addr[len(transport.DNS+"://"):])
+	p, err := reuseport.ListenPacket("udp", s.Addr[len(transport.DNS+"://"):])
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +194,7 @@ func (s *Server) Stop() (err error) {
 // Address together with Stop() implement caddy.GracefulServer.
 func (s *Server) Address() string { return s.Addr }
 
-// ServeDNS is the entry point for every request to the address that s
+// ServeDNS is the entry point for every request to the address that
 // is bound to. It acts as a multiplexer for the requests zonename as
 // defined in the request so that the correct zone
 // (configuration and plugin stack) will handle the request.
@@ -230,6 +240,10 @@ func (s *Server) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 	for {
 		if h, ok := s.zones[q[off:]]; ok {
+			if h.pluginChain == nil { // zone defined, but has not got any plugins
+				errorAndMetricsFunc(s.Addr, w, r, dns.RcodeRefused)
+				return
+			}
 			if r.Question[0].Qtype != dns.TypeDS {
 				if h.FilterFunc == nil {
 					rcode, _ := h.pluginChain.ServeDNS(ctx, w, r)

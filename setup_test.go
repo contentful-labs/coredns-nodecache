@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/caddyserver/caddy"
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 )
 

@@ -185,6 +185,10 @@ func SRV(ctx context.Context, b ServiceBackend, zone string, state request.Reque
 			w1 *= float64(serv.Weight)
 		}
 		weight := uint16(math.Floor(w1))
+		// weight should be at least 1
+		if weight == 0 {
+			weight = 1
+		}
 
 		what, ip := serv.HostType()
 
@@ -325,15 +329,69 @@ func CNAME(ctx context.Context, b ServiceBackend, zone string, state request.Req
 }
 
 // TXT returns TXT records from Backend or an error.
-func TXT(ctx context.Context, b ServiceBackend, zone string, state request.Request, opt Options) (records []dns.RR, err error) {
-	services, err := b.Services(ctx, state, false, opt)
+func TXT(ctx context.Context, b ServiceBackend, zone string, state request.Request, previousRecords []dns.RR, opt Options) (records []dns.RR, err error) {
+
+	services, err := b.Services(ctx, state, true, opt)
 	if err != nil {
 		return nil, err
 	}
 
+	dup := make(map[string]struct{})
+
 	for _, serv := range services {
-		records = append(records, serv.NewTXT(state.QName()))
+
+		what, _ := serv.HostType()
+
+		switch what {
+		case dns.TypeCNAME:
+			if Name(state.Name()).Matches(dns.Fqdn(serv.Host)) {
+				// x CNAME x is a direct loop, don't add those
+				continue
+			}
+
+			newRecord := serv.NewCNAME(state.QName(), serv.Host)
+			if len(previousRecords) > 7 {
+				// don't add it, and just continue
+				continue
+			}
+			if dnsutil.DuplicateCNAME(newRecord, previousRecords) {
+				continue
+			}
+			if dns.IsSubDomain(zone, dns.Fqdn(serv.Host)) {
+				state1 := state.NewWithQuestion(serv.Host, state.QType())
+				state1.Zone = zone
+				nextRecords, err := TXT(ctx, b, zone, state1, append(previousRecords, newRecord), opt)
+
+				if err == nil {
+					// Not only have we found something we should add the CNAME and the IP addresses.
+					if len(nextRecords) > 0 {
+						records = append(records, newRecord)
+						records = append(records, nextRecords...)
+					}
+				}
+				continue
+			}
+			// This means we can not complete the CNAME, try to look else where.
+			target := newRecord.Target
+			// Lookup
+			m1, e1 := b.Lookup(ctx, state, target, state.QType())
+			if e1 != nil {
+				continue
+			}
+			// Len(m1.Answer) > 0 here is well?
+			records = append(records, newRecord)
+			records = append(records, m1.Answer...)
+			continue
+
+		case dns.TypeTXT:
+			if _, ok := dup[serv.Host]; !ok {
+				dup[serv.Host] = struct{}{}
+				return append(records, serv.NewTXT(state.QName())), nil
+			}
+
+		}
 	}
+
 	return records, nil
 }
 
@@ -364,7 +422,7 @@ func NS(ctx context.Context, b ServiceBackend, zone string, state request.Reques
 	old := state.QName()
 
 	state.Clear()
-	state.Req.Question[0].Name = "ns.dns." + zone
+	state.Req.Question[0].Name = dnsutil.Join("ns.dns.", zone)
 	services, err := b.Services(ctx, state, false, opt)
 	if err != nil {
 		return nil, nil, err
@@ -404,12 +462,8 @@ func SOA(ctx context.Context, b ServiceBackend, zone string, state request.Reque
 
 	header := dns.RR_Header{Name: zone, Rrtype: dns.TypeSOA, Ttl: ttl, Class: dns.ClassINET}
 
-	Mbox := hostmaster + "."
-	Ns := "ns.dns."
-	if zone[0] != '.' {
-		Mbox += zone
-		Ns += zone
-	}
+	Mbox := dnsutil.Join(hostmaster, zone)
+	Ns := dnsutil.Join("ns.dns", zone)
 
 	soa := &dns.SOA{Hdr: header,
 		Mbox:    Mbox,

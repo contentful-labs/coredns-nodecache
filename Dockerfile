@@ -2,7 +2,7 @@ FROM golang:1.14-stretch AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
-RUN git clone --single-branch --branch v1.7.0 https://github.com/coredns/coredns.git /coredns
+RUN git clone --single-branch --branch v1.8.0 https://github.com/coredns/coredns.git /coredns
 
 WORKDIR /coredns
 
