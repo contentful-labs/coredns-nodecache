@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/caddyserver/caddy"
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
@@ -90,7 +90,7 @@ func getDefaultCfg() config {
 	}
 }
 
-func shouldSkipTearDown(c *caddy.Controller) bool{
+func shouldSkipTearDown(c *caddy.Controller) bool {
 	for c.Next() {
 		for c.NextArg() {
 			if strings.ToLower(c.Val()) == "skipteardown" {

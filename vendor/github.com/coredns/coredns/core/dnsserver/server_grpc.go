@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/pb"
+	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
@@ -32,7 +34,7 @@ func NewServergRPC(addr string, group []*Config) (*ServergRPC, error) {
 		return nil, err
 	}
 	// The *tls* plugin must make sure that multiple conflicting
-	// TLS configuration return an error: it can only be specified once.
+	// TLS configuration returns an error: it can only be specified once.
 	var tlsConfig *tls.Config
 	for _, conf := range s.zones {
 		// Should we error if some configs *don't* have TLS?
@@ -41,6 +43,9 @@ func NewServergRPC(addr string, group []*Config) (*ServergRPC, error) {
 
 	return &ServergRPC{Server: s, tlsConfig: tlsConfig}, nil
 }
+
+// Compile-time check to ensure Server implements the caddy.GracefulServer interface
+var _ caddy.GracefulServer = &Server{}
 
 // Serve implements caddy.TCPServer interface.
 func (s *ServergRPC) Serve(l net.Listener) error {
@@ -72,7 +77,7 @@ func (s *ServergRPC) ServePacket(p net.PacketConn) error { return nil }
 // Listen implements caddy.TCPServer interface.
 func (s *ServergRPC) Listen() (net.Listener, error) {
 
-	l, err := net.Listen("tcp", s.Addr[len(transport.GRPC+"://"):])
+	l, err := reuseport.Listen("tcp", s.Addr[len(transport.GRPC+"://"):])
 	if err != nil {
 		return nil, err
 	}

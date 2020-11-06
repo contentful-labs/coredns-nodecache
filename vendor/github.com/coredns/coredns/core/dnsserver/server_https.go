@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/doh"
 	"github.com/coredns/coredns/plugin/pkg/response"
+	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 )
 
@@ -30,18 +32,32 @@ func NewServerHTTPS(addr string, group []*Config) (*ServerHTTPS, error) {
 		return nil, err
 	}
 	// The *tls* plugin must make sure that multiple conflicting
-	// TLS configuration return an error: it can only be specified once.
+	// TLS configuration returns an error: it can only be specified once.
 	var tlsConfig *tls.Config
 	for _, conf := range s.zones {
 		// Should we error if some configs *don't* have TLS?
 		tlsConfig = conf.TLSConfig
 	}
+	if tlsConfig == nil {
+		return nil, fmt.Errorf("DoH requires TLS to be configured, see the tls plugin")
+	}
+	// http/2 is recommended when using DoH. We need to specify it in next protos
+	// or the upgrade won't happen.
+	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 
-	sh := &ServerHTTPS{Server: s, tlsConfig: tlsConfig, httpsServer: new(http.Server)}
+	srv := &http.Server{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	sh := &ServerHTTPS{Server: s, tlsConfig: tlsConfig, httpsServer: srv}
 	sh.httpsServer.Handler = sh
 
 	return sh, nil
 }
+
+// Compile-time check to ensure Server implements the caddy.GracefulServer interface
+var _ caddy.GracefulServer = &Server{}
 
 // Serve implements caddy.TCPServer interface.
 func (s *ServerHTTPS) Serve(l net.Listener) error {
@@ -61,7 +77,7 @@ func (s *ServerHTTPS) ServePacket(p net.PacketConn) error { return nil }
 // Listen implements caddy.TCPServer interface.
 func (s *ServerHTTPS) Listen() (net.Listener, error) {
 
-	l, err := net.Listen("tcp", s.Addr[len(transport.HTTPS+"://"):])
+	l, err := reuseport.Listen("tcp", s.Addr[len(transport.HTTPS+"://"):])
 	if err != nil {
 		return nil, err
 	}

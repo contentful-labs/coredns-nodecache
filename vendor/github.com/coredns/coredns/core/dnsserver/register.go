@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coredns/caddy"
+	"github.com/coredns/caddy/caddyfile"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/parse"
 	"github.com/coredns/coredns/plugin/pkg/transport"
-
-	"github.com/caddyserver/caddy"
-	"github.com/caddyserver/caddy/caddyfile"
 )
 
 const serverType = "dns"
@@ -51,6 +50,9 @@ func (h *dnsContext) saveConfig(key string, cfg *Config) {
 	h.configs = append(h.configs, cfg)
 	h.keysToConfigs[key] = cfg
 }
+
+// Compile-time check to ensure dnsContext implements the caddy.Context interface
+var _ caddy.Context = &dnsContext{}
 
 // InspectServerBlocks make sure that everything checks out before
 // executing directives and otherwise prepares the directives to
