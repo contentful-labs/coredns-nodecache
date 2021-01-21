@@ -1,8 +1,8 @@
-FROM golang:1.14-stretch AS builder
+FROM golang:1.15-buster AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
-RUN git clone --single-branch --branch v1.8.0 https://github.com/coredns/coredns.git /coredns
+RUN git clone --single-branch --branch v1.8.1 https://github.com/coredns/coredns.git /coredns
 
 WORKDIR /coredns
 
@@ -16,7 +16,7 @@ COPY *.go /coredns/plugin/nodecache/
 RUN make
 RUN chmod 0755 /coredns/coredns
 
-FROM alpine:latest
+FROM alpine:1.13
 RUN apk add iptables
 
 COPY --from=builder /coredns/coredns /
