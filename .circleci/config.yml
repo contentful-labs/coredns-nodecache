@@ -97,6 +97,10 @@ workflows:
                 - /pull\/[0-9]+/
       - publish-tag:
           # Only run this job on git tag pushes
+          requires:
+            - build
+            - lint
+            - test
           filters:
             branches:
               ignore: /.*/
