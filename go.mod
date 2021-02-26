@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/coredns/caddy v1.1.0
-	github.com/coredns/coredns v1.8.1
+	github.com/coredns/coredns v1.8.3
 	github.com/coreos/go-iptables v0.4.5
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/vishvananda/netlink v1.1.0
