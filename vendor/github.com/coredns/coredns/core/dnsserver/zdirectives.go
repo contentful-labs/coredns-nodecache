@@ -37,6 +37,7 @@ var Directives = []string{
 	"rewrite",
 	"dnssec",
 	"autopath",
+	"minimal",
 	"template",
 	"transfer",
 	"hosts",
