@@ -13,6 +13,7 @@ RUN mkdir -p plugin/nodecache
 RUN echo 'nodecache:nodecache' >> /coredns/plugin.cfg
 
 COPY *.go /coredns/plugin/nodecache/
+RUN go get github.com/coreos/go-iptables@f901d6c2a4f2a4df092b98c33366dfba1f93d7a0 github.com/vishvananda/netlink@f049be6f391489d3f374498fe0c8df8449258372
 RUN make
 RUN chmod 0755 /coredns/coredns
 
