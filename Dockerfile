@@ -13,6 +13,8 @@ RUN mkdir -p plugin/nodecache
 RUN echo 'nodecache:nodecache' >> /coredns/plugin.cfg
 
 COPY *.go /coredns/plugin/nodecache/
+COPY go.mod go.sum /coredns/
+RUN go mod download
 RUN make
 RUN chmod 0755 /coredns/coredns
 
