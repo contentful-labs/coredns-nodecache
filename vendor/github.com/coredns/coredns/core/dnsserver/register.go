@@ -21,6 +21,7 @@ const serverType = "dns"
 // wise they potentially clash with other server types.
 func init() {
 	flag.StringVar(&Port, serverType+".port", DefaultPort, "Default port")
+	flag.StringVar(&Port, "p", DefaultPort, "Default port")
 
 	caddy.RegisterServerType(serverType, caddy.ServerType{
 		Directives: func() []string { return Directives },
@@ -107,6 +108,8 @@ func (h *dnsContext) InspectServerBlocks(sourceFile string, serverBlocks []caddy
 
 		serverBlocks[ib].Keys = s.Keys // important to save back the new keys that are potentially created here.
 
+		var firstConfigInBlock *Config
+
 		for ik := range s.Keys {
 			za := zoneAddrs[ik]
 			s.Keys[ik] = za.String()
@@ -117,6 +120,15 @@ func (h *dnsContext) InspectServerBlocks(sourceFile string, serverBlocks []caddy
 				Port:        za.Port,
 				Transport:   za.Transport,
 			}
+
+			// Set reference to the first config in the current block.
+			// This is used later by MakeServers to share a single plugin list
+			// for all zones in a server block.
+			if ik == 0 {
+				firstConfigInBlock = cfg
+			}
+			cfg.firstConfigInBlock = firstConfigInBlock
+
 			keyConfig := keyForConfig(ib, ik)
 			h.saveConfig(keyConfig, cfg)
 		}
@@ -132,6 +144,17 @@ func (h *dnsContext) MakeServers() ([]caddy.Server, error) {
 	errValid := h.validateZonesAndListeningAddresses()
 	if errValid != nil {
 		return nil, errValid
+	}
+
+	// Copy the Plugin, ListenHosts and Debug from first config in the block
+	// to all other config in the same block . Doing this results in zones
+	// sharing the same plugin instances and settings as other zones in
+	// the same block.
+	for _, c := range h.configs {
+		c.Plugin = c.firstConfigInBlock.Plugin
+		c.ListenHosts = c.firstConfigInBlock.ListenHosts
+		c.Debug = c.firstConfigInBlock.Debug
+		c.TLSConfig = c.firstConfigInBlock.TLSConfig
 	}
 
 	// we must map (group) each config to a bind address

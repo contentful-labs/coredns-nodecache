@@ -4,20 +4,19 @@ executors:
     environment:
       IMAGE_NAME: contentful/coredns-nodecache
     machine:
+      image: ubuntu-2004:202107-02
       docker_layer_caching: true
 jobs:
   lint:
-    machine:
-      docker_layer_caching: true
+    executor: docker-publisher
     steps:
       - checkout
       - run: make lint
   test:
-    machine:
-      docker_layer_caching: true
+    executor: docker-publisher
     steps:
       - checkout
-      - run: make test 
+      - run: make test
   build:
     executor: docker-publisher
     steps:
@@ -67,7 +66,7 @@ jobs:
           name: Load archived Docker image
           command: docker load -i /tmp/workspace/image.tar
       - run:
-          name: publish docker image with latest tag 
+          name: publish docker image with latest tag
           command: |
             docker tag contentful-labs/coredns-nodecache:latest $IMAGE_NAME:latest
             echo "$docker_password" | docker login -u "$docker_login" --password-stdin
@@ -80,7 +79,7 @@ workflows:
       - test:
           filters:
             tags:
-              only: /v[0-9]+(\.[0-9]+)*(-.*)*/ 
+              only: /v[0-9]+(\.[0-9]+)*(-.*)*/
       - build:
           filters:
             tags:
@@ -113,4 +112,4 @@ workflows:
             - test
           filters:
             branches:
-              only: master 
+              only: master
