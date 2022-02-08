@@ -2,7 +2,7 @@ FROM golang:1.17-buster AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
-RUN git clone --single-branch --branch v1.8.6 https://github.com/coredns/coredns.git /coredns
+RUN git clone --single-branch --branch v1.8.7 https://github.com/coredns/coredns.git /coredns
 
 WORKDIR /coredns
 
