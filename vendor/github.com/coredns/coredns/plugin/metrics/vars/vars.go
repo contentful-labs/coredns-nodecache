@@ -52,7 +52,7 @@ var (
 		Subsystem: subsystem,
 		Name:      "responses_total",
 		Help:      "Counter of response status codes.",
-	}, []string{"server", "zone", "rcode"})
+	}, []string{"server", "zone", "rcode", "plugin"})
 
 	Panic = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: plugin.Namespace,
