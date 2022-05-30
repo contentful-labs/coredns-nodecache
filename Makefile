@@ -6,7 +6,7 @@ run: build
 
 test:
 	docker run -ti -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \
-	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golang:1.17-buster go test -v -mod=vendor ./...
+	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golang:1.18-buster go test -v -mod=vendor ./...
 
 lint:
 	docker run -ti -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \

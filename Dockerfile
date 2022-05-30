@@ -1,4 +1,4 @@
-FROM golang:1.17-buster AS builder
+FROM golang:1.18-buster AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
