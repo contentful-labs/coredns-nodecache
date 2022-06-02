@@ -1,5 +1,7 @@
 build:
-	docker build -t contentful-labs/coredns-nodecache .
+	docker buildx build --platform linux/amd64 -t contentful-labs/coredns-nodecache-amd64 .
+	docker buildx build --platform linux/arm64 -t contentful-labs/coredns-nodecache-arm64 .
+	docker tag contentful-labs/coredns-nodecache-amd64 contentful-labs/coredns-nodecache
 
 run: build
 	docker run --cap-add=NET_ADMIN --cap-add=NET_RAW --privileged -P contentful-labs/coredns-nodecache
