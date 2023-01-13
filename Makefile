@@ -1,6 +1,6 @@
 #/usr/bin/make -f
 
-.PHONY: build run test lint
+.PHONY: all build run test lint
 
 all: lint test build
 
