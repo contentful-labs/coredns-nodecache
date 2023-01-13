@@ -28,20 +28,38 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Log in to GHCR
+        run: |
+          echo "${{ github.token }}" | docker login https://ghcr.io -u ${GITHUB_ACTOR} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: publish-latest
         run: |
-          docker tag contentful-labs/coredns-nodecache:latest contentful/latest
+          # Dockerhub
+          docker tag contentful-labs/coredns-nodecache:latest contentful/coredns-nodecache:latest
           docker push contentful/coredns-nodecache:latest
+          # GHCR
+          docker tag contentful-labs/coredns-nodecache:latest ghcr.io/contentful-labs/coredns-nodecache:latest
+          docker push ghcr.io/contentful-labs/coredns-nodecache:latest
         if: github.ref == 'refs/heads/master'
 
       - name: publish-branch
         run: |
+          # Dockerhub
           docker tag contentful-labs/coredns-nodecache:latest contentful/coredns-nodecache:${GITHUB_REF##*/}
           docker push contentful/coredns-nodecache:${GITHUB_REF##*/}
+          # GHCR
+          docker tag contentful-labs/coredns-nodecache:latest ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
+          docker push ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
         if: startsWith(github.ref, 'refs/heads/') && github.ref != 'refs/heads/master'
 
       - name: publish-tag
         run: |
+          # Dockerhub
           docker tag contentful-labs/coredns-nodecache:latest contentful/coredns-nodecache:${GITHUB_REF##*/}
           docker push contentful/coredns-nodecache:${GITHUB_REF##*/}
+          # GHCR
+          docker tag contentful-labs/coredns-nodecache:latest ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
+          docker push ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
         if: startsWith(github.ref, 'refs/tags/v')
