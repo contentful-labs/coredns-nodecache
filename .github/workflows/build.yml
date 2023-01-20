@@ -1,0 +1,65 @@
+name: build-push
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '*'
+    tags:
+      - 'v*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: lint
+        run: make lint
+
+      - name: test
+        run: make test
+
+      - name: build
+        run: make build
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ github.token }}" | docker login https://ghcr.io -u ${GITHUB_ACTOR} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: publish-latest
+        run: |
+          # Dockerhub
+          docker tag contentful-labs/coredns-nodecache:latest contentful/coredns-nodecache:latest
+          docker push contentful/coredns-nodecache:latest
+          # GHCR
+          docker tag contentful-labs/coredns-nodecache:latest ghcr.io/contentful-labs/coredns-nodecache:latest
+          docker push ghcr.io/contentful-labs/coredns-nodecache:latest
+        if: github.ref == 'refs/heads/master'
+
+      - name: publish-branch
+        run: |
+          # Dockerhub
+          docker tag contentful-labs/coredns-nodecache:latest contentful/coredns-nodecache:${GITHUB_REF##*/}
+          docker push contentful/coredns-nodecache:${GITHUB_REF##*/}
+          # GHCR
+          docker tag contentful-labs/coredns-nodecache:latest ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
+          docker push ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
+        if: startsWith(github.ref, 'refs/heads/') && github.ref != 'refs/heads/master'
+
+      - name: publish-tag
+        run: |
+          # Dockerhub
+          docker tag contentful-labs/coredns-nodecache:latest contentful/coredns-nodecache:${GITHUB_REF##*/}
+          docker push contentful/coredns-nodecache:${GITHUB_REF##*/}
+          # GHCR
+          docker tag contentful-labs/coredns-nodecache:latest ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
+          docker push ghcr.io/contentful-labs/coredns-nodecache:${GITHUB_REF##*/}
+        if: startsWith(github.ref, 'refs/tags/v')
