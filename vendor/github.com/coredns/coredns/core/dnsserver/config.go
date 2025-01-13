@@ -1,12 +1,15 @@
 package dnsserver
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/request"
 )
 
 // Config configuration for a single server.
@@ -20,6 +23,10 @@ type Config struct {
 
 	// The port to listen on.
 	Port string
+
+	// The number of servers that will listen on one port.
+	// By default, one server will be running.
+	NumSockets int
 
 	// Root points to a base directory we find user defined "things".
 	// First consumer is the file plugin to looks for zone files in this place.
@@ -40,8 +47,24 @@ type Config struct {
 	// may depend on it.
 	HTTPRequestValidateFunc func(*http.Request) bool
 
+	// FilterFuncs is used to further filter access
+	// to this handler. E.g. to limit access to a reverse zone
+	// on a non-octet boundary, i.e. /17
+	FilterFuncs []FilterFunc
+
+	// ViewName is the name of the Viewer PLugin defined in the Config
+	ViewName string
+
 	// TLSConfig when listening for encrypted connections (gRPC, DNS-over-TLS).
 	TLSConfig *tls.Config
+
+	// Timeouts for TCP, TLS and HTTPS servers.
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+
+	// TSIG secrets, [name]key.
+	TsigSecret map[string]string
 
 	// Plugin stack.
 	Plugin []plugin.Plugin
@@ -57,7 +80,13 @@ type Config struct {
 	// firstConfigInBlock is used to reference the first config in a server block, for the
 	// purpose of sharing single instance of each plugin among all zones in a server block.
 	firstConfigInBlock *Config
+
+	// metaCollector references the first MetadataCollector plugin, if one exists
+	metaCollector MetadataCollector
 }
+
+// FilterFunc is a function that filters requests from the Config
+type FilterFunc func(context.Context, *request.Request) bool
 
 // keyForConfig builds a key for identifying the configs during setup time
 func keyForConfig(blocIndex int, blocKeyIndex int) string {
