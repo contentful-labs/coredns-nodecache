@@ -52,8 +52,8 @@ func NewServergRPC(addr string, group []*Config) (*ServergRPC, error) {
 	return &ServergRPC{Server: s, tlsConfig: tlsConfig}, nil
 }
 
-// Compile-time check to ensure Server implements the caddy.GracefulServer interface
-var _ caddy.GracefulServer = &Server{}
+// Compile-time check to ensure ServergRPC implements the caddy.GracefulServer interface
+var _ caddy.GracefulServer = &ServergRPC{}
 
 // Serve implements caddy.TCPServer interface.
 func (s *ServergRPC) Serve(l net.Listener) error {
@@ -123,7 +123,7 @@ func (s *ServergRPC) Stop() (err error) {
 // back to the client as a protobuf.
 func (s *ServergRPC) Query(ctx context.Context, in *pb.DnsPacket) (*pb.DnsPacket, error) {
 	msg := new(dns.Msg)
-	err := msg.Unpack(in.Msg)
+	err := msg.Unpack(in.GetMsg())
 	if err != nil {
 		return nil, err
 	}
@@ -181,4 +181,5 @@ func (r *gRPCresponse) TsigTimersOnly(b bool)     {}
 func (r *gRPCresponse) Hijack()                   {}
 func (r *gRPCresponse) LocalAddr() net.Addr       { return r.localAddr }
 func (r *gRPCresponse) RemoteAddr() net.Addr      { return r.remoteAddr }
+func (r *gRPCresponse) Network() string           { return "" }
 func (r *gRPCresponse) WriteMsg(m *dns.Msg) error { r.Msg = m; return nil }
