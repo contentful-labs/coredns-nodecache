@@ -28,7 +28,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.61.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/quic-go/quic-go v0.48.2 // indirect
+	github.com/quic-go/quic-go v0.49.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
