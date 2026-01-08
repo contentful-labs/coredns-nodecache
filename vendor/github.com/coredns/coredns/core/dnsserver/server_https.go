@@ -18,15 +18,23 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/response"
 	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
+
+	"golang.org/x/net/netutil"
+)
+
+const (
+	// DefaultHTTPSMaxConnections is the default maximum number of concurrent connections.
+	DefaultHTTPSMaxConnections = 200
 )
 
 // ServerHTTPS represents an instance of a DNS-over-HTTPS server.
 type ServerHTTPS struct {
 	*Server
-	httpsServer  *http.Server
-	listenAddr   net.Addr
-	tlsConfig    *tls.Config
-	validRequest func(*http.Request) bool
+	httpsServer    *http.Server
+	listenAddr     net.Addr
+	tlsConfig      *tls.Config
+	validRequest   func(*http.Request) bool
+	maxConnections int
 }
 
 // loggerAdapter is a simple adapter around CoreDNS logger made to implement io.Writer in order to log errors from HTTP server
@@ -38,7 +46,8 @@ func (l *loggerAdapter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// HTTPRequestKey is the context key for the current processed HTTP request (if current processed request was done over DOH)
+// HTTPRequestKey is the context key for the HTTP request when processing DNS-over-HTTPS.
+// Plugins can access the original HTTP request to retrieve headers, client IP, and metadata.
 type HTTPRequestKey struct{}
 
 // NewServerHTTPS returns a new CoreDNS HTTPS server and compiles all plugins in to it.
@@ -75,21 +84,30 @@ func NewServerHTTPS(addr string, group []*Config) (*ServerHTTPS, error) {
 	}
 
 	srv := &http.Server{
-		ReadTimeout:  s.readTimeout,
-		WriteTimeout: s.writeTimeout,
-		IdleTimeout:  s.idleTimeout,
+		ReadTimeout:  s.ReadTimeout,
+		WriteTimeout: s.WriteTimeout,
+		IdleTimeout:  s.IdleTimeout,
 		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
 	}
+	maxConnections := DefaultHTTPSMaxConnections
+	if len(group) > 0 && group[0] != nil && group[0].MaxHTTPSConnections != nil {
+		maxConnections = *group[0].MaxHTTPSConnections
+	}
+
 	sh := &ServerHTTPS{
-		Server: s, tlsConfig: tlsConfig, httpsServer: srv, validRequest: validator,
+		Server:         s,
+		tlsConfig:      tlsConfig,
+		httpsServer:    srv,
+		validRequest:   validator,
+		maxConnections: maxConnections,
 	}
 	sh.httpsServer.Handler = sh
 
 	return sh, nil
 }
 
-// Compile-time check to ensure Server implements the caddy.GracefulServer interface
-var _ caddy.GracefulServer = &Server{}
+// Compile-time check to ensure ServerHTTPS implements the caddy.GracefulServer interface
+var _ caddy.GracefulServer = &ServerHTTPS{}
 
 // Serve implements caddy.TCPServer interface.
 func (s *ServerHTTPS) Serve(l net.Listener) error {
@@ -97,9 +115,15 @@ func (s *ServerHTTPS) Serve(l net.Listener) error {
 	s.listenAddr = l.Addr()
 	s.m.Unlock()
 
+	// Wrap listener to limit concurrent connections (before TLS)
+	if s.maxConnections > 0 {
+		l = netutil.LimitListener(l, s.maxConnections)
+	}
+
 	if s.tlsConfig != nil {
 		l = tls.NewListener(l, s.tlsConfig)
 	}
+
 	return s.httpsServer.Serve(l)
 }
 
@@ -168,7 +192,11 @@ func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// We just call the normal chain handler - all error handling is done there.
 	// We should expect a packet to be returned that we can send to the client.
-	ctx := context.WithValue(context.Background(), Key{}, s.Server)
+
+	// Propagate HTTP request context to DNS processing chain. This ensures that
+	// HTTP request timeouts, cancellations, and other context values are properly
+	// inherited by the DNS processing pipeline.
+	ctx := context.WithValue(r.Context(), Key{}, s.Server)
 	ctx = context.WithValue(ctx, LoopKey{}, 0)
 	ctx = context.WithValue(ctx, HTTPRequestKey{}, r)
 	s.ServeDNS(ctx, dw, msg)

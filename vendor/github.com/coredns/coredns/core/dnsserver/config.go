@@ -58,6 +58,30 @@ type Config struct {
 	// TLSConfig when listening for encrypted connections (gRPC, DNS-over-TLS).
 	TLSConfig *tls.Config
 
+	// MaxQUICStreams defines the maximum number of concurrent QUIC streams for a QUIC server.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxQUICStreams *int
+
+	// MaxQUICWorkerPoolSize defines the size of the worker pool for processing QUIC streams.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxQUICWorkerPoolSize *int
+
+	// MaxGRPCStreams defines the maximum number of concurrent streams per gRPC connection.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxGRPCStreams *int
+
+	// MaxGRPCConnections defines the maximum number of concurrent gRPC connections.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxGRPCConnections *int
+
+	// MaxHTTPSConnections defines the maximum number of concurrent HTTPS connections.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxHTTPSConnections *int
+
+	// MaxHTTPS3Streams defines the maximum number of concurrent QUIC streams for HTTPS3.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxHTTPS3Streams *int
+
 	// Timeouts for TCP, TLS and HTTPS servers.
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
