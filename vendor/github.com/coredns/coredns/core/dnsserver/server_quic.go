@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 
 	"github.com/coredns/coredns/plugin/metrics/vars"
@@ -32,15 +31,26 @@ const (
 	// DoQCodeProtocolError signals that the DoQ implementation encountered
 	// a protocol error and is forcibly aborting the connection.
 	DoQCodeProtocolError quic.ApplicationErrorCode = 2
+
+	// DefaultMaxQUICStreams is the default maximum number of concurrent QUIC streams
+	// on a per-connection basis. RFC 9250 (DNS-over-QUIC) does not require a high
+	// concurrent-stream limit; normal stub or recursive resolvers open only a handful
+	// of streams in parallel. This default (256) is a safe upper bound.
+	DefaultMaxQUICStreams = 256
+
+	// DefaultQUICStreamWorkers is the default number of workers for processing QUIC streams.
+	DefaultQUICStreamWorkers = 1024
 )
 
 // ServerQUIC represents an instance of a DNS-over-QUIC server.
 type ServerQUIC struct {
 	*Server
-	listenAddr   net.Addr
-	tlsConfig    *tls.Config
-	quicConfig   *quic.Config
-	quicListener *quic.Listener
+	listenAddr        net.Addr
+	tlsConfig         *tls.Config
+	quicConfig        *quic.Config
+	quicListener      *quic.Listener
+	maxStreams        int
+	streamProcessPool chan struct{}
 }
 
 // NewServerQUIC returns a new CoreDNS QUIC server and compiles all plugin in to it.
@@ -63,21 +73,44 @@ func NewServerQUIC(addr string, group []*Config) (*ServerQUIC, error) {
 		tlsConfig.NextProtos = []string{"doq"}
 	}
 
-	var quicConfig *quic.Config
-	quicConfig = &quic.Config{
-		MaxIdleTimeout:        s.idleTimeout,
-		MaxIncomingStreams:    math.MaxUint16,
-		MaxIncomingUniStreams: math.MaxUint16,
+	maxStreams := DefaultMaxQUICStreams
+	if len(group) > 0 && group[0] != nil && group[0].MaxQUICStreams != nil {
+		maxStreams = *group[0].MaxQUICStreams
+	}
+
+	streamProcessPoolSize := DefaultQUICStreamWorkers
+	if len(group) > 0 && group[0] != nil && group[0].MaxQUICWorkerPoolSize != nil {
+		streamProcessPoolSize = *group[0].MaxQUICWorkerPoolSize
+	}
+
+	var quicConfig = &quic.Config{
+		MaxIdleTimeout:        s.IdleTimeout,
+		MaxIncomingStreams:    int64(maxStreams),
+		MaxIncomingUniStreams: int64(maxStreams),
 		// Enable 0-RTT by default for all connections on the server-side.
 		Allow0RTT: true,
 	}
 
-	return &ServerQUIC{Server: s, tlsConfig: tlsConfig, quicConfig: quicConfig}, nil
+	return &ServerQUIC{
+		Server:            s,
+		tlsConfig:         tlsConfig,
+		quicConfig:        quicConfig,
+		maxStreams:        maxStreams,
+		streamProcessPool: make(chan struct{}, streamProcessPoolSize),
+	}, nil
 }
 
 // ServePacket implements caddy.UDPServer interface.
 func (s *ServerQUIC) ServePacket(p net.PacketConn) error {
 	s.m.Lock()
+	if s.quicListener == nil {
+		listener, err := quic.Listen(p, s.tlsConfig, s.quicConfig)
+		if err != nil {
+			s.m.Unlock()
+			return err
+		}
+		s.quicListener = listener
+	}
 	s.listenAddr = s.quicListener.Addr()
 	s.m.Unlock()
 
@@ -104,7 +137,10 @@ func (s *ServerQUIC) ServeQUIC() error {
 
 // serveQUICConnection handles a new QUIC connection. It waits for new streams
 // and passes them to serveQUICStream.
-func (s *ServerQUIC) serveQUICConnection(conn quic.Connection) {
+func (s *ServerQUIC) serveQUICConnection(conn *quic.Conn) {
+	if conn == nil {
+		return
+	}
 	for {
 		// In DoQ, one query consumes one stream.
 		// The client MUST select the next available client-initiated bidirectional
@@ -120,11 +156,40 @@ func (s *ServerQUIC) serveQUICConnection(conn quic.Connection) {
 			return
 		}
 
-		go s.serveQUICStream(stream, conn)
+		// Use a bounded worker pool with context cancellation
+		select {
+		case s.streamProcessPool <- struct{}{}:
+			// Got worker slot immediately
+			go func(st *quic.Stream, cn *quic.Conn) {
+				defer func() { <-s.streamProcessPool }() // Release worker slot
+				s.serveQUICStream(st, cn)
+			}(stream, conn)
+		default:
+			// Worker pool full, check for context cancellation
+			go func(st *quic.Stream, cn *quic.Conn) {
+				select {
+				case s.streamProcessPool <- struct{}{}:
+					// Got worker slot after waiting
+					defer func() { <-s.streamProcessPool }() // Release worker slot
+					s.serveQUICStream(st, cn)
+				case <-conn.Context().Done():
+					// Connection context was cancelled while waiting
+					st.Close()
+					return
+				}
+			}(stream, conn)
+		}
 	}
 }
 
-func (s *ServerQUIC) serveQUICStream(stream quic.Stream, conn quic.Connection) {
+func (s *ServerQUIC) serveQUICStream(stream *quic.Stream, conn *quic.Conn) {
+	if conn == nil {
+		return
+	}
+	if stream == nil {
+		s.closeQUICConn(conn, DoQCodeInternalError)
+		return
+	}
 	buf, err := readDOQMessage(stream)
 
 	// io.EOF does not really mean that there's any error, it is just
@@ -219,7 +284,7 @@ func (s *ServerQUIC) Serve(l net.Listener) error { return nil }
 func (s *ServerQUIC) Listen() (net.Listener, error) { return nil, nil }
 
 // closeQUICConn quietly closes the QUIC connection.
-func (s *ServerQUIC) closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
+func (s *ServerQUIC) closeQUICConn(conn *quic.Conn, code quic.ApplicationErrorCode) {
 	if conn == nil {
 		return
 	}
@@ -298,7 +363,8 @@ func readDOQMessage(r io.Reader) ([]byte, error) {
 	// A client or server receives a STREAM FIN before receiving all the bytes
 	// for a message indicated in the 2-octet length field.
 	// See https://www.rfc-editor.org/rfc/rfc9250#section-4.3.3-2.2
-	if size != uint16(len(buf)) {
+	//nolint:gosec
+	if size != uint16(len(buf)) { // #nosec G115 -- buf length fits in uint16
 		return nil, fmt.Errorf("message size does not match 2-byte prefix")
 	}
 

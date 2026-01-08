@@ -19,7 +19,7 @@ type StreamFrame struct {
 	fromPool bool
 }
 
-func parseStreamFrame(b []byte, typ uint64, _ protocol.Version) (*StreamFrame, int, error) {
+func ParseStreamFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamFrame, int, error) {
 	startLen := len(b)
 	hasOffset := typ&0b100 > 0
 	fin := typ&0b1 > 0
@@ -58,7 +58,10 @@ func parseStreamFrame(b []byte, typ uint64, _ protocol.Version) (*StreamFrame, i
 
 	var frame *StreamFrame
 	if dataLen < protocol.MinStreamFrameBufferSize {
-		frame = &StreamFrame{Data: make([]byte, dataLen)}
+		frame = &StreamFrame{}
+		if dataLen > 0 {
+			frame.Data = make([]byte, dataLen)
+		}
 	} else {
 		frame = GetStreamFrame()
 		// The STREAM frame can't be larger than the StreamFrame we obtained from the buffer,
@@ -74,7 +77,7 @@ func parseStreamFrame(b []byte, typ uint64, _ protocol.Version) (*StreamFrame, i
 	frame.Fin = fin
 	frame.DataLenPresent = hasDataLen
 
-	if dataLen != 0 {
+	if dataLen > 0 {
 		copy(frame.Data, b)
 	}
 	if frame.Offset+frame.DataLen() > protocol.MaxByteCount {
