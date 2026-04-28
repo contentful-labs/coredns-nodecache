@@ -16,4 +16,4 @@ test:
 
 lint:
 	docker run -t -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \
-	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golangci/golangci-lint:v1.63.4 golangci-lint run
+	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golangci/golangci-lint:v2.11.4 golangci-lint run
