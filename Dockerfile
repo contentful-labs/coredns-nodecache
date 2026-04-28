@@ -1,4 +1,4 @@
-FROM golang:1.24.2 AS builder
+FROM golang:1.26.2 AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
@@ -16,7 +16,7 @@ COPY *.go /coredns/plugin/nodecache/
 RUN make
 RUN chmod 0755 /coredns/coredns
 
-FROM alpine:3.21.3
+FROM alpine:3.22.4
 RUN apk add iptables
 
 COPY --from=builder /coredns/coredns /

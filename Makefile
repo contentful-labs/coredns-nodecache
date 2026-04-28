@@ -12,7 +12,7 @@ run: build
 
 test:
 	docker run -t -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \
-	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golang:1.23.4-bookworm go test -v -mod=vendor ./...
+	-w /go/src/github.com/contentful-labs/coredns-nodecache/ golang:1.26.2-bookworm go test -v -mod=vendor ./...
 
 lint:
 	docker run -t -v $$PWD:/go/src/github.com/contentful-labs/coredns-nodecache \
