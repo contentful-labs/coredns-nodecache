@@ -18,15 +18,25 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/response"
 	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
+
+	"github.com/miekg/dns"
+	"github.com/pires/go-proxyproto"
+	"golang.org/x/net/netutil"
+)
+
+const (
+	// DefaultHTTPSMaxConnections is the default maximum number of concurrent connections.
+	DefaultHTTPSMaxConnections = 200
 )
 
 // ServerHTTPS represents an instance of a DNS-over-HTTPS server.
 type ServerHTTPS struct {
 	*Server
-	httpsServer  *http.Server
-	listenAddr   net.Addr
-	tlsConfig    *tls.Config
-	validRequest func(*http.Request) bool
+	httpsServer    *http.Server
+	listenAddr     net.Addr
+	tlsConfig      *tls.Config
+	validRequest   func(*http.Request) bool
+	maxConnections int
 }
 
 // loggerAdapter is a simple adapter around CoreDNS logger made to implement io.Writer in order to log errors from HTTP server
@@ -38,8 +48,12 @@ func (l *loggerAdapter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// HTTPRequestKey is the context key for the current processed HTTP request (if current processed request was done over DOH)
+// HTTPRequestKey is the context key for the HTTP request when processing DNS-over-HTTPS.
+// Plugins can access the original HTTP request to retrieve headers, client IP, and metadata.
 type HTTPRequestKey struct{}
+
+// connAddrKey is the context key for the per-connection local address set by ConnContext.
+type connAddrKey struct{}
 
 // NewServerHTTPS returns a new CoreDNS HTTPS server and compiles all plugins in to it.
 func NewServerHTTPS(addr string, group []*Config) (*ServerHTTPS, error) {
@@ -75,21 +89,33 @@ func NewServerHTTPS(addr string, group []*Config) (*ServerHTTPS, error) {
 	}
 
 	srv := &http.Server{
-		ReadTimeout:  s.readTimeout,
-		WriteTimeout: s.writeTimeout,
-		IdleTimeout:  s.idleTimeout,
+		ReadTimeout:  s.ReadTimeout,
+		WriteTimeout: s.WriteTimeout,
+		IdleTimeout:  s.IdleTimeout,
 		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return context.WithValue(ctx, connAddrKey{}, c.LocalAddr())
+		},
 	}
+	maxConnections := DefaultHTTPSMaxConnections
+	if len(group) > 0 && group[0] != nil && group[0].MaxHTTPSConnections != nil {
+		maxConnections = *group[0].MaxHTTPSConnections
+	}
+
 	sh := &ServerHTTPS{
-		Server: s, tlsConfig: tlsConfig, httpsServer: srv, validRequest: validator,
+		Server:         s,
+		tlsConfig:      tlsConfig,
+		httpsServer:    srv,
+		validRequest:   validator,
+		maxConnections: maxConnections,
 	}
 	sh.httpsServer.Handler = sh
 
 	return sh, nil
 }
 
-// Compile-time check to ensure Server implements the caddy.GracefulServer interface
-var _ caddy.GracefulServer = &Server{}
+// Compile-time check to ensure ServerHTTPS implements the caddy.GracefulServer interface
+var _ caddy.GracefulServer = &ServerHTTPS{}
 
 // Serve implements caddy.TCPServer interface.
 func (s *ServerHTTPS) Serve(l net.Listener) error {
@@ -97,20 +123,29 @@ func (s *ServerHTTPS) Serve(l net.Listener) error {
 	s.listenAddr = l.Addr()
 	s.m.Unlock()
 
+	// Wrap listener to limit concurrent connections (before TLS)
+	if s.maxConnections > 0 {
+		l = netutil.LimitListener(l, s.maxConnections)
+	}
+
 	if s.tlsConfig != nil {
 		l = tls.NewListener(l, s.tlsConfig)
 	}
+
 	return s.httpsServer.Serve(l)
 }
 
 // ServePacket implements caddy.UDPServer interface.
-func (s *ServerHTTPS) ServePacket(p net.PacketConn) error { return nil }
+func (s *ServerHTTPS) ServePacket(_p net.PacketConn) error { return nil }
 
 // Listen implements caddy.TCPServer interface.
 func (s *ServerHTTPS) Listen() (net.Listener, error) {
 	l, err := reuseport.Listen("tcp", s.Addr[len(transport.HTTPS+"://"):])
 	if err != nil {
 		return nil, err
+	}
+	if s.connPolicy != nil {
+		l = &proxyproto.Listener{Listener: l, ConnPolicy: s.connPolicy}
 	}
 	return l, nil
 }
@@ -141,6 +176,14 @@ func (s *ServerHTTPS) Stop() error {
 	return nil
 }
 
+// localAddr returns the per-connection local address from context, or s.listenAddr as fallback.
+func (s *ServerHTTPS) localAddr(r *http.Request) net.Addr {
+	if addr, ok := r.Context().Value(connAddrKey{}).(net.Addr); ok {
+		return addr
+	}
+	return s.listenAddr
+}
+
 // ServeHTTP is the handler that gets the HTTP request and converts to the dns format, calls the plugin
 // chain, converts it back and write it to the client.
 func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +193,7 @@ func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := doh.RequestToMsg(r)
+	msg, raw, err := doh.RequestToMsgWire(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		s.countResponse(http.StatusBadRequest)
@@ -161,14 +204,28 @@ func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h, p, _ := net.SplitHostPort(r.RemoteAddr)
 	port, _ := strconv.Atoi(p)
 	dw := &DoHWriter{
-		laddr:   s.listenAddr,
+		laddr:   s.localAddr(r),
 		raddr:   &net.TCPAddr{IP: net.ParseIP(h), Port: port},
 		request: r,
 	}
 
+	if tsig := msg.IsTsig(); tsig != nil {
+		if s.tsigSecret == nil {
+			dw.tsigStatus = dns.ErrSecret
+		} else if secret, ok := s.tsigSecret[tsig.Hdr.Name]; !ok {
+			dw.tsigStatus = dns.ErrSecret
+		} else {
+			dw.tsigStatus = dns.TsigVerify(raw, secret, "", false)
+		}
+	}
+
 	// We just call the normal chain handler - all error handling is done there.
 	// We should expect a packet to be returned that we can send to the client.
-	ctx := context.WithValue(context.Background(), Key{}, s.Server)
+
+	// Propagate HTTP request context to DNS processing chain. This ensures that
+	// HTTP request timeouts, cancellations, and other context values are properly
+	// inherited by the DNS processing pipeline.
+	ctx := context.WithValue(r.Context(), Key{}, s.Server)
 	ctx = context.WithValue(ctx, LoopKey{}, 0)
 	ctx = context.WithValue(ctx, HTTPRequestKey{}, r)
 	s.ServeDNS(ctx, dw, msg)

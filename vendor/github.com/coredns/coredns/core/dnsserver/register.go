@@ -30,7 +30,7 @@ func init() {
 	})
 }
 
-func newContext(i *caddy.Instance) caddy.Context {
+func newContext(_i *caddy.Instance) caddy.Context {
 	return &dnsContext{keysToConfigs: make(map[string]*Config)}
 }
 
@@ -52,7 +52,7 @@ var _ caddy.Context = &dnsContext{}
 // InspectServerBlocks make sure that everything checks out before
 // executing directives and otherwise prepares the directives to
 // be parsed and executed.
-func (h *dnsContext) InspectServerBlocks(sourceFile string, serverBlocks []caddyfile.ServerBlock) ([]caddyfile.ServerBlock, error) {
+func (h *dnsContext) InspectServerBlocks(_sourceFile string, serverBlocks []caddyfile.ServerBlock) ([]caddyfile.ServerBlock, error) {
 	// Normalize and check all the zone names and check for duplicates
 	for ib, s := range serverBlocks {
 		// Walk the s.Keys and expand any reverse address in their proper DNS in-addr zones. If the expansions leads for
@@ -87,6 +87,8 @@ func (h *dnsContext) InspectServerBlocks(sourceFile string, serverBlocks []caddy
 				case transport.GRPC:
 					port = transport.GRPCPort
 				case transport.HTTPS:
+					port = transport.HTTPSPort
+				case transport.HTTPS3:
 					port = transport.HTTPSPort
 				}
 			}
@@ -235,11 +237,13 @@ func (h *dnsContext) validateZonesAndListeningAddresses() error {
 			akey := zoneAddr{Transport: conf.Transport, Zone: conf.Zone, Address: h, Port: conf.Port}
 			var existZone, overlapZone *zoneAddr
 			if len(conf.FilterFuncs) > 0 {
-				// This config has filters. Check for overlap with other (unfiltered) configs.
-				existZone, overlapZone = checker.check(akey)
+				// This config has filters (e.g. view plugin). It is allowed to
+				// share a zone/port with an unfiltered server block, so we only
+				// check without registering and skip the "already defined" error.
+				_, overlapZone = checker.check(akey)
 			} else {
-				// This config has no filters. Check for overlap with other (unfiltered) configs,
-				// and register the zone to prevent subsequent zones from overlapping with it.
+				// This config has no filters. Check for overlap with other
+				// unfiltered configs and register the zone.
 				existZone, overlapZone = checker.registerAndCheck(akey)
 			}
 			if existZone != nil {
@@ -347,6 +351,13 @@ func makeServersForGroup(addr string, group []*Config) ([]caddy.Server, error) {
 				return nil, err
 			}
 			servers = append(servers, s)
+
+		case transport.HTTPS3:
+			s, err := NewServerHTTPS3(addr, group)
+			if err != nil {
+				return nil, err
+			}
+			servers = append(servers, s)
 		}
 	}
 	return servers, nil
@@ -364,5 +375,3 @@ var (
 	// GracefulTimeout is the maximum duration of a graceful shutdown.
 	GracefulTimeout time.Duration
 )
-
-var _ caddy.GracefulServer = new(Server)

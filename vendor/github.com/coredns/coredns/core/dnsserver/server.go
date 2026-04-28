@@ -4,8 +4,8 @@ package dnsserver
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -16,6 +16,7 @@ import (
 	"github.com/coredns/coredns/plugin/metrics/vars"
 	"github.com/coredns/coredns/plugin/pkg/edns"
 	"github.com/coredns/coredns/plugin/pkg/log"
+	cproxyproto "github.com/coredns/coredns/plugin/pkg/proxyproto"
 	"github.com/coredns/coredns/plugin/pkg/rcode"
 	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/trace"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
+	"github.com/pires/go-proxyproto"
 )
 
 // Server represents an instance of a server, which serves
@@ -32,23 +34,30 @@ import (
 // the same address and the listener may be stopped for
 // graceful termination (POSIX only).
 type Server struct {
-	Addr string // Address we listen on
+	Addr         string        // Address we listen on
+	IdleTimeout  time.Duration // Idle timeout for TCP
+	ReadTimeout  time.Duration // Read timeout for TCP
+	WriteTimeout time.Duration // Write timeout for TCP
+
+	connPolicy                    proxyproto.ConnPolicyFunc // Proxy Protocol connection policy function
+	udpSessionTrackingTTL         time.Duration             // TTL for UDP PPv2 session tracking (0 = disabled)
+	udpSessionTrackingMaxSessions int                       // LRU cap for UDP session tracking (0 = default)
 
 	server [2]*dns.Server // 0 is a net.Listener, 1 is a net.PacketConn (a *UDPConn) in our case.
 	m      sync.Mutex     // protects the servers
 
 	zones        map[string][]*Config // zones keyed by their address
-	dnsWg        sync.WaitGroup       // used to wait on outstanding connections
 	graceTimeout time.Duration        // the maximum duration of a graceful shutdown
 	trace        trace.Trace          // the trace plugin for the server
 	debug        bool                 // disable recover()
 	stacktrace   bool                 // enable stacktrace in recover error log
 	classChaos   bool                 // allow non-INET class queries
-	idleTimeout  time.Duration        // Idle timeout for TCP
-	readTimeout  time.Duration        // Read timeout for TCP
-	writeTimeout time.Duration        // Write timeout for TCP
 
 	tsigSecret map[string]string
+
+	// Ensure Stop is idempotent when invoked concurrently (e.g., during reload and SIGTERM).
+	stopOnce sync.Once
+	stopErr  error
 }
 
 // MetadataCollector is a plugin that can retrieve metadata functions from all metadata providing plugins
@@ -63,19 +72,11 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 		Addr:         addr,
 		zones:        make(map[string][]*Config),
 		graceTimeout: 5 * time.Second,
-		idleTimeout:  10 * time.Second,
-		readTimeout:  3 * time.Second,
-		writeTimeout: 5 * time.Second,
+		IdleTimeout:  10 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 5 * time.Second,
 		tsigSecret:   make(map[string]string),
 	}
-
-	// We have to bound our wg with one increment
-	// to prevent a "race condition" that is hard-coded
-	// into sync.WaitGroup.Wait() - basically, an add
-	// with a positive delta must be guaranteed to
-	// occur before Wait() is called on the wg.
-	// In a way, this kind of acts as a safety barrier.
-	s.dnsWg.Add(1)
 
 	for _, site := range group {
 		if site.Debug {
@@ -89,19 +90,17 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 
 		// set timeouts
 		if site.ReadTimeout != 0 {
-			s.readTimeout = site.ReadTimeout
+			s.ReadTimeout = site.ReadTimeout
 		}
 		if site.WriteTimeout != 0 {
-			s.writeTimeout = site.WriteTimeout
+			s.WriteTimeout = site.WriteTimeout
 		}
 		if site.IdleTimeout != 0 {
-			s.idleTimeout = site.IdleTimeout
+			s.IdleTimeout = site.IdleTimeout
 		}
 
 		// copy tsig secrets
-		for key, secret := range site.TsigSecret {
-			s.tsigSecret[key] = secret
-		}
+		maps.Copy(s.tsigSecret, site.TsigSecret)
 
 		// compile custom plugin for everything
 		var stack plugin.Handler
@@ -130,6 +129,15 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 			}
 		}
 		site.pluginChain = stack
+		if site.ProxyProtoConnPolicy != nil {
+			s.connPolicy = site.ProxyProtoConnPolicy
+		}
+		if site.ProxyProtoUDPSessionTrackingTTL > 0 {
+			s.udpSessionTrackingTTL = site.ProxyProtoUDPSessionTrackingTTL
+		}
+		if site.ProxyProtoUDPSessionTrackingMaxSessions > 0 {
+			s.udpSessionTrackingMaxSessions = site.ProxyProtoUDPSessionTrackingMaxSessions
+		}
 	}
 
 	if !s.debug {
@@ -152,10 +160,10 @@ func (s *Server) Serve(l net.Listener) error {
 		Net:           "tcp",
 		TsigSecret:    s.tsigSecret,
 		MaxTCPQueries: tcpMaxQueries,
-		ReadTimeout:   s.readTimeout,
-		WriteTimeout:  s.writeTimeout,
+		ReadTimeout:   s.ReadTimeout,
+		WriteTimeout:  s.WriteTimeout,
 		IdleTimeout: func() time.Duration {
-			return s.idleTimeout
+			return s.IdleTimeout
 		},
 		Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 			ctx := context.WithValue(context.Background(), Key{}, s)
@@ -188,6 +196,9 @@ func (s *Server) Listen() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.connPolicy != nil {
+		l = &proxyproto.Listener{Listener: l, ConnPolicy: s.connPolicy}
+	}
 	return l, nil
 }
 
@@ -202,44 +213,40 @@ func (s *Server) ListenPacket() (net.PacketConn, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	if s.connPolicy != nil {
+		p = &cproxyproto.PacketConn{PacketConn: p, ConnPolicy: s.connPolicy, UDPSessionTrackingTTL: s.udpSessionTrackingTTL, UDPSessionTrackingMaxSessions: s.udpSessionTrackingMaxSessions}
+	}
 	return p, nil
 }
 
-// Stop stops the server. It blocks until the server is
-// totally stopped. On POSIX systems, it will wait for
-// connections to close (up to a max timeout of a few
-// seconds); on Windows it will close the listener
-// immediately.
+// Stop attempts to gracefully stop the server.
+// It waits until the server is stopped and its connections are closed,
+// up to a max timeout of a few seconds. If unsuccessful, an error is returned.
+//
 // This implements Caddy.Stopper interface.
-func (s *Server) Stop() (err error) {
-	if runtime.GOOS != "windows" {
-		// force connections to close after timeout
-		done := make(chan struct{})
-		go func() {
-			s.dnsWg.Done() // decrement our initial increment used as a barrier
-			s.dnsWg.Wait()
-			close(done)
-		}()
+func (s *Server) Stop() error {
+	s.stopOnce.Do(func() {
+		ctx, cancelCtx := context.WithTimeout(context.Background(), s.graceTimeout)
+		defer cancelCtx()
 
-		// Wait for remaining connections to finish or
-		// force them all to close after timeout
-		select {
-		case <-time.After(s.graceTimeout):
-		case <-done:
-		}
-	}
+		var wg sync.WaitGroup
+		s.m.Lock()
+		for _, s1 := range s.server {
+			// We might not have started and initialized the full set of servers
+			if s1 == nil {
+				continue
+			}
 
-	// Close the listener now; this stops the server without delay
-	s.m.Lock()
-	for _, s1 := range s.server {
-		// We might not have started and initialized the full set of servers
-		if s1 != nil {
-			err = s1.Shutdown()
+			wg.Go(func() {
+				s1.ShutdownContext(ctx)
+			})
 		}
-	}
-	s.m.Unlock()
-	return
+		s.m.Unlock()
+		wg.Wait()
+
+		s.stopErr = ctx.Err()
+	})
+	return s.stopErr
 }
 
 // Address together with Stop() implement caddy.GracefulServer.
@@ -407,7 +414,7 @@ func (s *Server) Tracer() ot.Tracer {
 }
 
 // errorFunc responds to an DNS request with an error.
-func errorFunc(server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
+func errorFunc(_server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
 	state := request.Request{W: w, Req: r}
 
 	answer := new(dns.Msg)

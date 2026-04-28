@@ -10,6 +10,8 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
+
+	"github.com/pires/go-proxyproto"
 )
 
 // Config configuration for a single server.
@@ -57,6 +59,51 @@ type Config struct {
 
 	// TLSConfig when listening for encrypted connections (gRPC, DNS-over-TLS).
 	TLSConfig *tls.Config
+
+	// MaxQUICStreams defines the maximum number of concurrent QUIC streams for a QUIC server.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxQUICStreams *int
+
+	// MaxQUICWorkerPoolSize defines the size of the worker pool for processing QUIC streams.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxQUICWorkerPoolSize *int
+
+	// ProxyProtoConnPolicy is the function that will be used to
+	// configure the PROXY protocol settings on listeners.
+	// If nil, PROXY protocol is disabled.
+	ProxyProtoConnPolicy proxyproto.ConnPolicyFunc
+
+	// ProxyProtoUDPSessionTrackingTTL enables per-UDP-session source address
+	// caching on the PacketConn listener when set to a positive duration.
+	// The first datagram of a Cloudflare Spectrum PPv2 session (which contains
+	// only the PROXY Protocol header and no DNS payload) is used to populate a
+	// short-lived cache keyed by the Spectrum-side remote address. Subsequent
+	// datagrams from the same remote address that carry no PROXY Protocol header
+	// are associated with the cached real client address for up to this duration
+	// (refreshed on each matching packet). A zero or negative value disables
+	// session tracking. Has no effect unless ProxyProtoConnPolicy is also set.
+	ProxyProtoUDPSessionTrackingTTL time.Duration
+
+	// ProxyProtoUDPSessionTrackingMaxSessions is the maximum number of concurrent
+	// UDP sessions held in the LRU cache. Zero means use the default (udpSessionMaxEntries).
+	// Has no effect unless ProxyProtoUDPSessionTrackingTTL is positive.
+	ProxyProtoUDPSessionTrackingMaxSessions int
+
+	// MaxGRPCStreams defines the maximum number of concurrent streams per gRPC connection.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxGRPCStreams *int
+
+	// MaxGRPCConnections defines the maximum number of concurrent gRPC connections.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxGRPCConnections *int
+
+	// MaxHTTPSConnections defines the maximum number of concurrent HTTPS connections.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxHTTPSConnections *int
+
+	// MaxHTTPS3Streams defines the maximum number of concurrent QUIC streams for HTTPS3.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxHTTPS3Streams *int
 
 	// Timeouts for TCP, TLS and HTTPS servers.
 	ReadTimeout  time.Duration
