@@ -2,11 +2,11 @@ FROM golang:1.26.2 AS builder
 
 RUN apt update && apt upgrade -y && apt install iptables -y
 
-RUN git clone --single-branch --branch v1.12.1 https://github.com/coredns/coredns.git /coredns
+RUN git clone --single-branch --branch v1.14.3 https://github.com/coredns/coredns.git /coredns
 
 WORKDIR /coredns
 
-RUN make gen
+RUN go get -u && go mod tidy && make gen
 RUN make
 
 RUN mkdir -p plugin/nodecache
