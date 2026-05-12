@@ -98,7 +98,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: coredns-nodecache
-        image: contentful/coredns-nodecache:latest
+        image: ghcr.io/contentful-labs/coredns-nodecache:latest
         resources:
           limits:
             memory: 50Mi
@@ -233,7 +233,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: coredns-nodecache
-        image: contentful/coredns-nodecache:latest
+        image: ghcr.io/contentful-labs/coredns-nodecache:latest
         resources:
           limits:
             memory: 50Mi

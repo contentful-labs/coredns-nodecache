@@ -18,7 +18,7 @@ Additionally, coredns-nodecache can provide a **high-availability** setup for No
 
 ### Plugin configuration
 
-An image is available on DockerHub: https://hub.docker.com/r/contentful/coredns-nodecache
+An image is available on GitHub Container Registry: https://ghcr.io/contentful-labs/coredns-nodecache
 
 Configuration is done by adding `nodecache` to configuration blocks in your CoreDNS configuration file.
 
