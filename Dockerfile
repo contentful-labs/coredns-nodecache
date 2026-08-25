@@ -17,7 +17,7 @@ RUN make
 RUN chmod 0755 /coredns/coredns
 
 FROM alpine:3.22.4
-RUN apk add iptables
+RUN apk update && apk upgrade --no-cache && apk add --no-cache iptables
 
 COPY --from=builder /coredns/coredns /
 COPY Corefile /
