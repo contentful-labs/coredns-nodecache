@@ -16,8 +16,8 @@ COPY *.go /coredns/plugin/nodecache/
 RUN make
 RUN chmod 0755 /coredns/coredns
 
-FROM alpine:3.22.4
-RUN apk add iptables
+FROM alpine:3.24.1
+RUN apk add --no-cache iptables
 
 COPY --from=builder /coredns/coredns /
 COPY Corefile /
