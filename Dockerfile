@@ -1,6 +1,6 @@
 FROM golang:1.27.1 AS builder
 
-RUN apt update && apt upgrade -y && apt install iptables -y
+RUN apt update && apt install -y iptables
 
 RUN git clone --single-branch --branch v1.14.7 https://github.com/coredns/coredns.git /coredns
 
@@ -15,8 +15,9 @@ COPY *.go /coredns/plugin/nodecache/
 RUN make
 RUN chmod 0755 /coredns/coredns
 
-FROM alpine:3.24.1
-RUN apk add --no-cache iptables libssl3=3.5.8-r0 libcrypto3=3.5.8-r0
+FROM alpine:3.24.2
+
+RUN apk add --no-cache iptables "zlib>=1.3.2-r1"
 
 COPY --from=builder /coredns/coredns /
 COPY Corefile /
