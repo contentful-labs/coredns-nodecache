@@ -6,7 +6,11 @@ RUN git clone --single-branch --branch v1.14.7 https://github.com/coredns/coredn
 
 WORKDIR /coredns
 
-RUN go mod tidy && make gen && make
+RUN go get -u google.golang.org/grpc@v1.83.2 && \
+    go get -u golang.org/x/crypto@v0.56.0 && \
+    go get -u golang.org/x/mod@v0.40.0 && \
+    go mod tidy && \
+    make gen && make # update pkgs manually
 
 RUN mkdir -p plugin/nodecache
 RUN echo 'nodecache:nodecache' >> /coredns/plugin.cfg
